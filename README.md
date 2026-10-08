@@ -4,7 +4,6 @@
 
 Upload a video, pick a language and a voice, and get the video back dubbed into Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, English or Hinglish. Each dubbed line starts exactly where the original line started, and the output is exactly as long as the input.
 
-Built on Gnani AI speech models for the **Great Indian AI Internship Challenge 2026**.
 
 > **Status: planning.** No code yet. The architecture, requirements, challenges and roadmap are in [PLAN.md](PLAN.md).
 
