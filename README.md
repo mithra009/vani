@@ -58,12 +58,12 @@ cd frontend
 npm install
 npm run dev        # http://localhost:5173
 ```
-Without the backend, the app runs in **demo mode**: the pipeline is simulated in the browser with sample lines, your video is returned undubbed, and no credits are used. A "Demo mode" pill in the nav shows this. Once the FastAPI backend is running on port 8000, the dev server proxies `/api` to it and the pill shows "Live".
+Without the backend, the app runs in **demo mode**: the pipeline is simulated in the browser with sample lines, your video is returned undubbed, and no credits are used. A "Demo mode" pill in the nav shows this. Once the FastAPI backend is running on port 8010, the dev server proxies `/api` to it and the pill shows "Live".
 
 ### Backend (FastAPI)
 ```
 .venv\Scripts\python -m pip install -r backend\requirements.txt
-.venv\Scripts\python -m uvicorn backend.app.main:app --port 8000
+.venv\Scripts\python -m uvicorn backend.app.main:app --port 8010
 ```
 Needs `GNANI_API_KEY` and `GOOGLE_API_KEY` in `.env`, and ffmpeg on PATH. Data is stored in `storage/` (jobs, media, and a cache of every paid API result, so re-runs never pay twice).
 

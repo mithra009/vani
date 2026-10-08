@@ -1,6 +1,6 @@
 """HTTP API used by the React frontend (contract: frontend/src/lib/api.js, PLAN.md §6).
 
-    .venv\\Scripts\\python -m uvicorn backend.app.main:app --port 8000
+    .venv\\Scripts\\python -m uvicorn backend.app.main:app --port 8010
 """
 
 from __future__ import annotations
