@@ -15,7 +15,17 @@ DB_PATH = STORAGE / "vani.db"
 
 GNANI_API_KEY = os.getenv("GNANI_API_KEY", "").strip()
 GNANI_BASE = os.getenv("GNANI_BASE_URL", "https://api.vachana.ai")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
+GOOGLE_API_KEY = (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or "").strip()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip()
+SUPABASE_JWKS_URL = os.getenv("SUPABASE_JWKS_URL", f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json").strip()
+
+# Where project documents live: "supabase" (default when configured) or "sqlite" (tests, offline).
+DB_BACKEND = os.getenv("VANI_DB", "supabase" if SUPABASE_URL and SUPABASE_SECRET_KEY else "sqlite")
+# Tests only: skip token checks and act as one fixed local user.
+AUTH_DISABLED = os.getenv("VANI_AUTH_DISABLED", "0") == "1"
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
 
 # FAKE_PROVIDERS=1 swaps Gnani and Gemini for local stand-ins (no network, no credits).
