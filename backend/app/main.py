@@ -104,7 +104,7 @@ def list_jobs(user: User):
 
 @app.post("/api/jobs")
 async def create_job(user: User, video: UploadFile = File(...), src_lang: str = Form("auto"),
-                     tgt_lang: str = Form(...), mode: str = Form("dub")):
+                     tgt_lang: str = Form(...), mode: str = Form("dub"), name: str = Form("")):
     if mode not in ("dub", "narrate"):
         raise HTTPException(400, "mode must be 'dub' or 'narrate'.")
     if tgt_lang == "same" and mode != "narrate":
@@ -132,7 +132,8 @@ async def create_job(user: User, video: UploadFile = File(...), src_lang: str = 
     upload_id = await asyncio.to_thread(store.record_upload, user["id"], "video", video.filename or "video",
                                         size, round(info["duration"], 3), str(path))
     job = {
-        "id": job_id, "user_id": user["id"], "upload_id": upload_id, "name": video.filename or "video", "size": size, "created_at": int(time.time() * 1000),
+        "id": job_id, "user_id": user["id"], "upload_id": upload_id,
+        "name": " ".join(name.split())[:120] or Path(video.filename or "video").stem, "size": size, "created_at": int(time.time() * 1000),
         "mode": mode, "status": "awaiting_narration" if mode == "narrate" else "transcribing",
         "stage": None, "stage_progress": 0, "src_lang": src_lang, "tgt_lang": tgt_lang,
         "duration_s": round(info["duration"], 3), "video_url": f"/api/jobs/{job_id}/video",

@@ -121,7 +121,7 @@ export default function Result({ job, onJob }) {
             </div>
           )}
 
-          <Link to="/" className="btn btn-secondary" style={{ textDecoration: "none" }}>Dub another video</Link>
+          <Link to="/new" className="btn btn-secondary" style={{ textDecoration: "none" }}>Dub another video</Link>
         </aside>
       </div>
     </div>

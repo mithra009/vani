@@ -48,7 +48,7 @@ export const authApi = {
 const real = {
   health: () => http("/health"),
   listJobs: () => http("/jobs"),
-  async createJob(file, srcLang, tgtLang, onUpload, mode = "dub") {
+  async createJob(file, srcLang, tgtLang, onUpload, mode = "dub", name = "") {
     // XHR rather than fetch so we can report upload progress.
     return new Promise((resolve, reject) => {
       const form = new FormData();
@@ -56,6 +56,7 @@ const real = {
       form.append("src_lang", srcLang);
       form.append("tgt_lang", tgtLang);
       form.append("mode", mode);
+      if (name) form.append("name", name);
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/jobs");
       const t = accessToken();
@@ -72,6 +73,11 @@ const real = {
     });
   },
   getJob: (id) => http(`/jobs/${id}`).then(authed),
+  // Needs PATCH/DELETE /api/jobs/{id} on the backend (projects backend, not built yet).
+  renameJob: (id, name) => http(`/jobs/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+  }),
+  deleteJob: (id) => http(`/jobs/${id}`, { method: "DELETE" }),
   uploadNarration(id, take) {
     const form = new FormData();
     form.append("audio", take.blob, take.name || "narration");
