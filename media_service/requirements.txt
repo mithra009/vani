@@ -1,0 +1,8 @@
+fastapi>=0.143
+uvicorn[standard]>=0.30
+asyncpg>=0.29
+supabase>=2.4
+PyJWT>=2.8
+python-dotenv>=1.0
+httpx>=0.28
+pillow>=10

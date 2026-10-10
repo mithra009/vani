@@ -43,7 +43,7 @@ export default function Job({ mode }) {
       <div className="page empty">
         <p className="subhead">Couldn't open this project</p>
         <p className="muted">{error}</p>
-        <Link to="/">Start a new dub</Link>
+        <Link to="/projects">Back to projects</Link>
       </div>
     );
   }
@@ -113,7 +113,7 @@ export default function Job({ mode }) {
         <div className="page empty">
           <p className="subhead">Processing stopped</p>
           <p className="muted">{job.error || "Something went wrong while processing this video."}</p>
-          <Link to="/">Try another video</Link>
+          <Link to="/new">Try another video</Link>
         </div>
       )}
     </>

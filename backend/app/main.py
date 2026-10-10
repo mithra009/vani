@@ -18,6 +18,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from . import jobs, media, pipeline, providers, store
+from .auth import User, me_router, router as auth_router
 from .config import FAKE_PROVIDERS, MAX_UPLOAD_BYTES, MAX_VIDEO_SECONDS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -44,22 +45,33 @@ async def lifespan(_: FastAPI):
     task = asyncio.create_task(jobs.worker())
     await asyncio.sleep(0)
     # Resume work interrupted by a restart; cached paid calls make this free (PLAN N6).
-    for j in store.list_jobs():
-        if j["status"] == "transcribing" and (j["mode"] == "dub" or j.get("narration")):
-            jobs.enqueue(pipeline.transcribe, j["id"])
-        elif j["status"] == "dubbing":
-            jobs.enqueue(pipeline.dub, j["id"])
+    global DB_ERROR
+    try:
+        for j in await asyncio.to_thread(store.list_jobs):
+            if j["status"] == "transcribing" and (j["mode"] == "dub" or j.get("narration")):
+                jobs.enqueue(pipeline.transcribe, j["id"])
+            elif j["status"] == "dubbing":
+                jobs.enqueue(pipeline.dub, j["id"])
+        DB_ERROR = None
+    except Exception as e:
+        DB_ERROR = ("Database tables are missing. Run supabase/migrations/001_users_uploads_projects.sql "
+                    "in Supabase → SQL Editor, then restart." if "PGRST205" in str(e) else f"Database error: {e}")
+        log.error(DB_ERROR)
     log.info("Vani backend ready (%s providers)", "FAKE" if FAKE_PROVIDERS else "real")
     yield
+    store.flush_now()
     task.cancel()
 
 
 app = FastAPI(title="Vani", lifespan=lifespan)
+app.include_router(auth_router)
+app.include_router(me_router)
 
 
-def get_job(job_id: str) -> dict:
+def get_job(job_id: str, user: dict) -> dict:
     job = store.load_job(job_id)
-    if not job:
+    # Someone else's project looks exactly like a missing one.
+    if not job or job.get("user_id") != user["id"]:
         raise HTTPException(404, "This project doesn't exist.")
     return job
 
@@ -77,19 +89,22 @@ async def save_upload(f: UploadFile, dst: Path, limit: int) -> int:
     return size
 
 
+DB_ERROR: str | None = None
+
+
 @app.get("/api/health")
 def health():
-    return {"ok": True, "providers": "fake" if FAKE_PROVIDERS else "real"}
+    return {"ok": DB_ERROR is None, "providers": "fake" if FAKE_PROVIDERS else "real", "db_error": DB_ERROR}
 
 
 @app.get("/api/jobs")
-def list_jobs():
-    return [jobs.public({k: v for k, v in j.items() if k != "segments"}) for j in store.list_jobs()]
+def list_jobs(user: User):
+    return [jobs.public({k: v for k, v in j.items() if k != "segments"}) for j in store.list_jobs(user["id"])]
 
 
 @app.post("/api/jobs")
-async def create_job(video: UploadFile = File(...), src_lang: str = Form("auto"), tgt_lang: str = Form(...),
-                     mode: str = Form("dub")):
+async def create_job(user: User, video: UploadFile = File(...), src_lang: str = Form("auto"),
+                     tgt_lang: str = Form(...), mode: str = Form("dub"), name: str = Form("")):
     if mode not in ("dub", "narrate"):
         raise HTTPException(400, "mode must be 'dub' or 'narrate'.")
     if tgt_lang == "same" and mode != "narrate":
@@ -114,8 +129,11 @@ async def create_job(video: UploadFile = File(...), src_lang: str = Form("auto")
         shutil.rmtree(d, ignore_errors=True)
         raise HTTPException(400, "That video is longer than 10 minutes.")
 
+    upload_id = await asyncio.to_thread(store.record_upload, user["id"], "video", video.filename or "video",
+                                        size, round(info["duration"], 3), str(path))
     job = {
-        "id": job_id, "name": video.filename or "video", "size": size, "created_at": int(time.time() * 1000),
+        "id": job_id, "user_id": user["id"], "upload_id": upload_id,
+        "name": " ".join(name.split())[:120] or Path(video.filename or "video").stem, "size": size, "created_at": int(time.time() * 1000),
         "mode": mode, "status": "awaiting_narration" if mode == "narrate" else "transcribing",
         "stage": None, "stage_progress": 0, "src_lang": src_lang, "tgt_lang": tgt_lang,
         "duration_s": round(info["duration"], 3), "video_url": f"/api/jobs/{job_id}/video",
@@ -130,13 +148,13 @@ async def create_job(video: UploadFile = File(...), src_lang: str = Form("auto")
 
 
 @app.get("/api/jobs/{job_id}")
-def read_job(job_id: str):
-    return jobs.public(get_job(job_id))
+def read_job(job_id: str, user: User):
+    return jobs.public(get_job(job_id, user))
 
 
 @app.post("/api/jobs/{job_id}/narration")
-async def upload_narration(job_id: str, audio: UploadFile = File(...), offset_s: float = Form(0.0)):
-    job = get_job(job_id)
+async def upload_narration(job_id: str, user: User, audio: UploadFile = File(...), offset_s: float = Form(0.0)):
+    job = get_job(job_id, user)
     if job["mode"] != "narrate" or job["status"] not in ("awaiting_narration", "review", "failed"):
         raise HTTPException(409, "This project isn't waiting for a narration.")
     d = store.job_dir(job_id)
@@ -150,6 +168,8 @@ async def upload_narration(job_id: str, audio: UploadFile = File(...), offset_s:
     length = min(info["duration"], job["duration_s"] - offset)
     if length < 1.0:
         raise HTTPException(400, "The narration is too short.")
+    await asyncio.to_thread(store.record_upload, user["id"], "narration", audio.filename or "narration",
+                            raw.stat().st_size, round(info["duration"], 3), str(raw))
     wav = d / "narration.wav"
     await asyncio.to_thread(media.ffmpeg, "-i", str(raw), "-t", f"{length:.3f}", "-ac", "1", "-ar", "48000", str(wav))
     job["_"]["narration_path"] = str(wav)
@@ -160,8 +180,8 @@ async def upload_narration(job_id: str, audio: UploadFile = File(...), offset_s:
 
 
 @app.patch("/api/jobs/{job_id}/segments")
-async def edit_segments(job_id: str, request: Request):
-    job = get_job(job_id)
+async def edit_segments(job_id: str, user: User, request: Request):
+    job = get_job(job_id, user)
     if job["status"] != "review":
         raise HTTPException(409, "The transcript can only be edited before dubbing.")
     body = await request.json()
@@ -175,8 +195,8 @@ async def edit_segments(job_id: str, request: Request):
 
 
 @app.post("/api/jobs/{job_id}/dub")
-async def start_dub(job_id: str, request: Request):
-    job = get_job(job_id)
+async def start_dub(job_id: str, user: User, request: Request):
+    job = get_job(job_id, user)
     if job["status"] not in ("review", "done", "failed"):
         raise HTTPException(409, "This project isn't ready to dub.")
     if request.headers.get("content-type", "").startswith("multipart/"):
@@ -190,6 +210,8 @@ async def start_dub(job_id: str, request: Request):
         if not 4.5 <= dur <= 31:
             raise HTTPException(400, f"The voice sample is {dur:.1f} s. It needs to be 5 to 30 seconds.")
         job["_"]["voice_sample_path"] = str(p)
+        await asyncio.to_thread(store.record_upload, user["id"], "voice_sample", sample.filename or "voice-sample",
+                                p.stat().st_size, round(dur, 3), str(p))
     else:
         settings = await request.json()
     voice = settings.get("voice") or {}
@@ -208,8 +230,8 @@ async def start_dub(job_id: str, request: Request):
 
 
 @app.post("/api/jobs/{job_id}/segments/{idx}/regenerate")
-async def regenerate(job_id: str, idx: int):
-    job = get_job(job_id)
+async def regenerate(job_id: str, user: User, idx: int):
+    job = get_job(job_id, user)
     if job["status"] != "done" or not 0 <= idx < len(job["segments"]):
         raise HTTPException(409, "That line can't be regenerated now.")
     job = await pipeline.regenerate(job_id, idx)
@@ -217,13 +239,13 @@ async def regenerate(job_id: str, idx: int):
 
 
 @app.get("/api/jobs/{job_id}/events")
-async def events(job_id: str, request: Request):
-    get_job(job_id)
+async def events(job_id: str, user: User, request: Request):
+    get_job(job_id, user)
     q = jobs.subscribe(job_id)
 
     async def stream():
         try:
-            yield f"data: {json.dumps(jobs.public(get_job(job_id)), ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(jobs.public(get_job(job_id, user)), ensure_ascii=False)}\n\n"
             while not await request.is_disconnected():
                 try:
                     data = await asyncio.wait_for(q.get(), timeout=15)
@@ -244,31 +266,33 @@ def _file(job_id: str, name: str, media_type: str, download: str | None = None) 
 
 
 @app.get("/api/jobs/{job_id}/video")
-def video(job_id: str):
-    return FileResponse(get_job(job_id)["_"]["video_path"])
+def video(job_id: str, user: User):
+    return FileResponse(get_job(job_id, user)["_"]["video_path"])
 
 
 @app.get("/api/jobs/{job_id}/narration.wav")
-def narration(job_id: str):
+def narration(job_id: str, user: User):
+    get_job(job_id, user)
     return _file(job_id, "narration.wav", "audio/wav")
 
 
 @app.get("/api/jobs/{job_id}/output.mp4")
-def output(job_id: str):
-    job = get_job(job_id)
+def output(job_id: str, user: User):
+    job = get_job(job_id, user)
     stem = Path(job["name"]).stem
     return _file(job_id, "output.mp4", "video/mp4", f"{stem}.{job['tgt_lang']}.mp4")
 
 
 @app.get("/api/jobs/{job_id}/subs.{which}.srt")
-def subs(job_id: str, which: str):
+def subs(job_id: str, user: User, which: str):
     if which not in ("source", "target"):
         raise HTTPException(404)
+    get_job(job_id, user)
     return _file(job_id, f"subs.{which}.srt", "text/plain; charset=utf-8")
 
 
 @app.get("/api/voices/{voice_id}/preview")
-async def voice_preview(voice_id: str, lang: str):
+async def voice_preview(voice_id: str, lang: str, user: User):
     """One TTS call per voice and language, ever (cached)."""
     text = PREVIEW_TEXT.get(lang)
     if not text:

@@ -73,5 +73,36 @@ Tests (always use fake providers):
 .venv\Scripts\python -m pytest backend\tests
 ```
 
+### Media service (library uploads + processing worker)
+The Library tab is backed by a second FastAPI app plus a background worker:
+direct-to-Supabase uploads (signed URLs), a `jobs` queue in Postgres
+(`SELECT ... FOR UPDATE SKIP LOCKED`), and FFmpeg probe/thumbnail/proxy tasks.
+
+```
+# 1. apply the schema (assets, jobs, private "media" bucket)
+supabase link --project-ref <ref>      # once
+supabase db push                       # runs supabase/migrations/*.sql
+#    (or paste supabase/migrations/002_media_assets.sql into the SQL editor)
+
+# 2. set DATABASE_URL in .env — Supabase direct connection (:5432) or session
+#    pooler, NOT the transaction pooler (:6543)
+
+# 3. install + run both processes (plus the backend on :8010 and `npm run dev`)
+.venv\Scripts\python -m pip install -r media_service\requirements.txt
+.venv\Scripts\python -m uvicorn media_service.main:app --port 8020
+.venv\Scripts\python -m media_service.worker
+```
+
+The Vite dev server proxies `/api/uploads/*` and `/api/assets/*` to :8020 and the
+rest of `/api` to :8010. The worker runs FFmpeg/FFprobe in isolated subprocesses;
+proxies are capped at 1280 px on the longest side and keep the source's duration,
+timestamps and orientation. Soft-deleted assets are purged from storage by a
+cleanup job after a short grace period.
+
+Tests:
+```
+.venv\Scripts\python -m pytest media_service\tests
+```
+
 ## Responsible use
 Only dub videos you own or have permission to use. Only clone a voice with its owner's consent. Cloned output is labelled as AI-generated. Demo material uses self-recorded, synthetic content only.
