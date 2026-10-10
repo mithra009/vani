@@ -224,6 +224,8 @@ export const mock = {
     return () => listeners.set(id, (listeners.get(id) || []).filter((f) => f !== cb));
   },
 
+  previewUrl() { return null; },
+
   downloads(job) {
     return {
       video: job.output_url,

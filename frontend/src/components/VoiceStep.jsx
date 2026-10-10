@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { api } from "../lib/api.js";
 import { langName, voicesFor } from "../lib/catalog.js";
 import { clock } from "../lib/format.js";
 import { Play, Pause } from "./Icons.jsx";
@@ -128,7 +129,7 @@ export default function VoiceStep({ job, mode, onBack, onStart, starting }) {
     if (mode !== "live") return;
     if (playing === v.id) { audio.current?.pause(); setPlaying(null); return; }
     audio.current?.pause();
-    audio.current = new Audio(`/api/voices/${v.id}/preview?lang=${job.tgt_lang}`);
+    audio.current = new Audio(api.previewUrl(v.id, job.tgt_lang));
     audio.current.onended = () => setPlaying(null);
     audio.current.play().then(() => setPlaying(v.id)).catch(() => setPlaying(null));
   }
