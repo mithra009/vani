@@ -72,9 +72,9 @@ Organised by the components in [High_level_design.png](High_level_design.png). P
 | M3 | Narration and voice-sample uploads recorded as `uploads` rows | 🟨 | code done, not seen live |
 | M4 | Library page UI: grid, search, drag-drop upload, "New project" from a video | ✅ | placeholder data + session uploads (`lib/libraryStore.js`) |
 | M5 | New project picks from the Library (two slides, optional name defaulting to video name) | ✅ | headless flow test, 10 Oct |
-| M6 | Library API (`GET/POST/DELETE /api/library`) backed by the `uploads` table | ⬜ | deferred by request |
-| M7 | Supabase Storage bucket for videos (free-plan file-size limits need checking) | ⬜ | |
-| M8 | Library survives page refresh (needs M6) | ⬜ | |
+| M6 | Media library API (`/api/uploads/init`, `/api/uploads/:id/complete`, `/api/assets`, `/api/assets/:id`, `/preview-url`, `DELETE`) | ✅ | `media_service/` FastAPI app; contract tests in `media_service/tests/` |
+| M7 | Supabase Storage private `media` bucket (opaque keys `{user}/{asset}/source.ext`) | ✅ | `supabase/migrations/002_media_assets.sql` |
+| M8 | Library survives page refresh (assets + signed thumbnails; worker probe/thumbnail/proxy) | ✅ | `media_service/worker.py` (SKIP LOCKED queue); Library tab polls asset status |
 
 ## 5. Project service
 

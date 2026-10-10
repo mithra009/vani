@@ -1,7 +1,19 @@
-GNANI_API_KEY = 
-GEMINI_API_KEY = 
+GNANI_API_KEY =
+GEMINI_API_KEY =
 SUPABASE_URL=
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 SUPABASE_JWKS_URL=
 
+# Postgres for the media service/worker — Supabase DIRECT connection (port 5432)
+# or the session pooler. The transaction pooler (6543) breaks SKIP LOCKED.
+DATABASE_URL=
+
+# Media service (library uploads + job queue). Optional overrides shown with defaults.
+MEDIA_API_PORT=8020
+SUPABASE_MEDIA_BUCKET=media
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+# Folder containing ffmpeg/ffprobe — used when they aren't on the launching shell's
+# PATH (e.g. a worker started before the PATH refresh). Windows example below.
+# FFMPEG_BIN_DIR=C:\ffmpeg\bin

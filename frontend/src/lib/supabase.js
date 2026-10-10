@@ -23,3 +23,5 @@ export function withToken(url) {
   if (!url || !token || !url.startsWith("/api/")) return url;
   return `${url}${url.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`;
 }
+
+

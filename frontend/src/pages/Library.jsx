@@ -1,12 +1,18 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { addVideos, removeVideo, useLibrary } from "../lib/libraryStore.js";
+import { addVideos, refreshLibrary, removeVideo, useLibrary } from "../lib/libraryStore.js";
 import { langName } from "../lib/catalog.js";
 import { ago, bytes, clock } from "../lib/format.js";
 
 const ACCEPT = "video/mp4,video/quicktime,video/webm,video/x-matroska,.mkv";
 
+const STATUS_LABEL = {
+  INITIATED: "Waiting…",
+  UPLOADED: "Waiting…",
+  PROCESSING: "Processing…",
+  FAILED: "Failed",
+};
 
 export default function Library() {
   const nav = useNavigate();
@@ -15,6 +21,9 @@ export default function Library() {
   const [q, setQ] = useState("");
   const [drag, setDrag] = useState(false);
   const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(null); // { name, phase, pct } while an upload runs
+
+  useEffect(() => { refreshLibrary(); }, []);
 
   const items = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -23,7 +32,9 @@ export default function Library() {
 
   async function add(files) {
     setError(null);
-    const { errors } = await addVideos(files);
+    const { errors } = await addVideos(files, (name, phase, pct) =>
+      setBusy({ name, phase, pct: phase === "upload" ? Math.round((pct || 0) * 100) : null }));
+    setBusy(null);
     if (errors.length) setError(errors.join(" "));
   }
 
@@ -44,10 +55,25 @@ export default function Library() {
 
       <div className="banner" style={{ marginBottom: 24 }}>
         <span className="banner-dot" />
-        <span><b>Preview.</b> Library storage isn't connected yet. The sample videos below are placeholders, and videos you upload stay available until the page is refreshed.</span>
+        <span><b>Library.</b> Uploaded videos are processed in the background (thumbnail &amp; preview) and saved to your account — they survive a page refresh. Processing usually takes a minute or two.</span>
       </div>
 
       {error && <div className="banner error" role="alert" style={{ marginBottom: 20 }}><span className="banner-dot" /><span>{error}</span></div>}
+
+      {busy && (
+        <div className="banner" role="status" style={{ marginBottom: 20 }}>
+          <span className="banner-dot" />
+          <span style={{ flex: 1 }}>
+            {busy.phase === "upload" ? `Uploading ${busy.name}… ${busy.pct ?? 0}%`
+              : busy.phase === "finalize" ? `Finalizing ${busy.name}…`
+              : `Preparing ${busy.name}…`}
+            <span style={{ display: "block", marginTop: 8, height: 6, background: "rgba(127,127,127,.25)", borderRadius: 4, overflow: "hidden" }}>
+              <span style={{ display: "block", height: "100%", borderRadius: 4, transition: "width .2s", background: "currentColor",
+                             width: `${busy.phase === "upload" ? busy.pct ?? 0 : busy.phase === "finalize" ? 100 : 4}%` }} />
+            </span>
+          </span>
+        </div>
+      )}
 
       <div className={`lib-drop ${drag ? "drag" : ""}`}
            onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -59,10 +85,13 @@ export default function Library() {
               <motion.article key={v.id} className="lib-card" layout
                               initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }}
                               transition={{ duration: 0.25 }}>
-                <div className="lib-thumb" style={v.local ? undefined : { background: v.cover }}>
+                <div className="lib-thumb" style={v.local || v.cover ? { background: v.cover } : undefined}>
                   {v.local && <video src={v.url} muted playsInline preload="metadata" />}
                   {v.duration_s && <span className="lib-dur mono">{clock(v.duration_s)}</span>}
                   {v.local && <span className="lib-badge">Not saved</span>}
+                  {v.remote && v.status && v.status !== "READY" && (
+                    <span className="lib-badge">{STATUS_LABEL[v.status] || v.status}</span>
+                  )}
                 </div>
                 <div className="lib-info">
                   <span className="lib-name" title={v.name}>{v.name}</span>
@@ -72,11 +101,11 @@ export default function Library() {
                 </div>
                 <div className="lib-actions">
                   <button className="btn btn-quiet btn-sm" disabled={!v.local}
-                          title={v.local ? undefined : "Sample item. Upload a video to use it."}
+                          title={v.local ? undefined : v.remote ? "Start a project once this video is ready." : "Sample item. Upload a video to use it."}
                           onClick={() => nav("/new", { state: { libraryId: v.id } })}>
                     New project
                   </button>
-                  {v.local && (
+                  {(v.local || v.remote) && (
                     <button className="link-btn body-sm" onClick={() => removeVideo(v.id)}>Remove</button>
                   )}
                 </div>

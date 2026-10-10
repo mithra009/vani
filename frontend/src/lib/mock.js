@@ -125,6 +125,15 @@ function transcribe(job, from, to) {
 export const mock = {
   async health() { return { mode: "demo" }; },
 
+  // Media library (media_service) — not simulated. libraryStore falls back to
+  // session-only items when these throw.
+  async listAssets() { return []; },
+  async initUpload() { throw new Error("Demo mode: cloud library storage isn't available."); },
+  async completeUpload() { throw new Error("Demo mode: cloud library storage isn't available."); },
+  async getAsset() { throw new Error("Demo mode: cloud library storage isn't available."); },
+  async previewUrl() { return null; },
+  async deleteAsset() { return { ok: true }; },
+
   async listJobs() {
     return [...jobs.values()].map(strip).sort((a, b) => b.created_at - a.created_at);
   },

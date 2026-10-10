@@ -47,6 +47,17 @@ export const authApi = {
 
 const real = {
   health: () => http("/health"),
+
+  // ---- media library (media_service, proxied on /api/uploads and /api/assets) ----
+  initUpload: (form) => http("/uploads/init", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+  }),
+  completeUpload: (assetId) => http(`/uploads/${assetId}/complete`, { method: "POST" }),
+  listAssets: () => http("/assets"),
+  getAsset: (id) => http(`/assets/${id}`),
+  previewUrl: (id) => http(`/assets/${id}/preview-url`),
+  deleteAsset: (id) => http(`/assets/${id}`, { method: "DELETE" }),
+
   listJobs: () => http("/jobs"),
   async createJob(file, srcLang, tgtLang, onUpload, mode = "dub", name = "") {
     // XHR rather than fetch so we can report upload progress.
