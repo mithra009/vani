@@ -129,12 +129,12 @@ export const mock = {
     return [...jobs.values()].map(strip).sort((a, b) => b.created_at - a.created_at);
   },
 
-  async createJob(file, srcLang, tgtLang, _onUpload, mode = "dub") {
+  async createJob(file, srcLang, tgtLang, _onUpload, mode = "dub", name = "") {
     const id = `demo-${seq++}`;
     const video_url = URL.createObjectURL(file);
     const duration_s = await videoDuration(video_url);
     const job = {
-      id, name: file.name, size: file.size, created_at: now(), mode,
+      id, name: name || file.name, size: file.size, created_at: now(), mode,
       status: mode === "narrate" ? "awaiting_narration" : "transcribing",
       stage: mode === "narrate" ? null : "ingest", stage_index: 0, stage_progress: 0,
       src_lang: srcLang, tgt_lang: tgtLang, duration_s, video_url, output_url: null, narration: null,
@@ -225,6 +225,21 @@ export const mock = {
   },
 
   previewUrl() { return null; },
+
+  async renameJob(id, name) {
+    const j = jobs.get(id);
+    if (!j) throw new Error("This project doesn't exist.");
+    j.name = name;
+    emit(id);
+    return strip(j);
+  },
+
+  async deleteJob(id) {
+    const j = jobs.get(id);
+    if (j) j._timers.forEach(clearInterval);
+    jobs.delete(id);
+    return { ok: true };
+  },
 
   downloads(job) {
     return {
