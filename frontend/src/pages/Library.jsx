@@ -51,7 +51,7 @@ export default function Library() {
     }
     setPreview({ name: v.name, url: null, loading: true });
     try {
-      const { url } = await api.previewUrl(v.id);
+      const { url } = await api.assetPreviewUrl(v.id);
       setPreview({ name: v.name, url });
     } catch (e) {
       setPreview(null);

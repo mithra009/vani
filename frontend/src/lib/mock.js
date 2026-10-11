@@ -131,7 +131,7 @@ export const mock = {
   async initUpload() { throw new Error("Demo mode: cloud library storage isn't available."); },
   async completeUpload() { throw new Error("Demo mode: cloud library storage isn't available."); },
   async getAsset() { throw new Error("Demo mode: cloud library storage isn't available."); },
-  async previewUrl() { return null; },
+  async assetPreviewUrl() { throw new Error("Demo mode: cloud library storage isn't available."); },
   async deleteAsset() { return { ok: true }; },
 
   async listJobs() {
@@ -233,7 +233,7 @@ export const mock = {
     return () => listeners.set(id, (listeners.get(id) || []).filter((f) => f !== cb));
   },
 
-  previewUrl() { return null; },
+  voicePreviewUrl() { return null; },
 
   async renameJob(id, name) {
     const j = jobs.get(id);
