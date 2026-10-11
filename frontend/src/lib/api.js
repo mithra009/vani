@@ -55,7 +55,7 @@ const real = {
   completeUpload: (assetId) => http(`/uploads/${assetId}/complete`, { method: "POST" }),
   listAssets: () => http("/assets"),
   getAsset: (id) => http(`/assets/${id}`),
-  previewUrl: (id) => http(`/assets/${id}/preview-url`),
+  assetPreviewUrl: (id) => http(`/assets/${id}/preview-url`),
   deleteAsset: (id) => http(`/assets/${id}`, { method: "DELETE" }),
 
   listJobs: () => http("/jobs"),
@@ -124,7 +124,7 @@ const real = {
     srtSource: withToken(`/api/jobs/${job.id}/subs.source.srt`),
     srtTarget: withToken(`/api/jobs/${job.id}/subs.target.srt`),
   }),
-  previewUrl: (voiceId, lang) => withToken(`/api/voices/${voiceId}/preview?lang=${lang}`),
+  voicePreviewUrl: (voiceId, lang) => withToken(`/api/voices/${voiceId}/preview?lang=${lang}`),
 };
 
 let impl = null;

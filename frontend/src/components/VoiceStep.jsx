@@ -129,7 +129,7 @@ export default function VoiceStep({ job, mode, onBack, onStart, starting }) {
     if (mode !== "live") return;
     if (playing === v.id) { audio.current?.pause(); setPlaying(null); return; }
     audio.current?.pause();
-    audio.current = new Audio(api.previewUrl(v.id, job.tgt_lang));
+    audio.current = new Audio(api.voicePreviewUrl(v.id, job.tgt_lang));
     audio.current.onended = () => setPlaying(null);
     audio.current.play().then(() => setPlaying(v.id)).catch(() => setPlaying(null));
   }
