@@ -8,6 +8,7 @@ URL is normalized to an absolute one here.
 from __future__ import annotations
 
 import logging
+import time
 from functools import lru_cache
 from typing import Any
 
@@ -78,11 +79,30 @@ def object_info(key: str) -> dict | None:
 
 
 def upload_file(local_path: str, key: str, content_type: str) -> None:
-    # supabase-py signature: upload(destination_key, file_path, options) — the key
-    # first. Swapped args make the client try to read the storage key as a local file.
+    # Read bytes ourselves (with a short retry) instead of handing the path to
+    # storage3: on Windows, Defender briefly locks a freshly-written file
+    # (WinError 32), and storage3's open(file, "rb") never closes the handle —
+    # which then also breaks TemporaryDirectory cleanup. Bytes are accepted
+    # natively and sidestep both problems.
+    data = _read_with_retry(local_path)
+    # "upsert" must be the STRING "true": storage3 copies the value straight into
+    # the x-upsert HTTP header, and httpx rejects non-str/bytes header values.
     admin().storage.from_(MEDIA_BUCKET).upload(
-        key, local_path, {"content-type": content_type, "upsert": True}
+        key, data, {"content-type": content_type, "upsert": "true"}
     )
+
+
+def _read_with_retry(local_path: str, tries: int = 5, delay: float = 0.25) -> bytes:
+    last: OSError | None = None
+    for i in range(tries):
+        try:
+            with open(local_path, "rb") as f:
+                return f.read()
+        except OSError as e:
+            last = e
+            if i < tries - 1:
+                time.sleep(delay)
+    raise last  # type: ignore[misc]
 
 
 def download(key: str) -> bytes:

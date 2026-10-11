@@ -5,7 +5,7 @@
 Upload a video, pick a language and a voice, and get the video back dubbed into Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, English or Hinglish. Each dubbed line starts exactly where the original line started, and the output is exactly as long as the input.
 
 
-> **Status: planning.** No code yet. The architecture, requirements, challenges and roadmap are in [PLAN.md](PLAN.md).
+> **Status:** Working implementation. See the [system diagram](SYSTEM_DIAGRAM.md) for the current component architecture and job flow. The original requirements, design decisions, and roadmap are in [PLAN.md](PLAN.md).
 
 ---
 

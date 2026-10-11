@@ -108,13 +108,19 @@ async def handle_cleanup(job: dict, workdir: Path) -> dict:
     prefix = job["storage_key"].rsplit("/", 1)[0]
     keys = [f"{prefix}/source{ext}" for ext in (".mp4", ".mov", ".webm", ".mkv")]
     keys += [f"{prefix}/thumb.jpg", f"{prefix}/proxy.mp4"]
-    # Remove only objects that exist (list the folder once).
+    # Remove only objects that exist (list the folder once). storage3 returns
+    # dicts, so read the name via [] with an attribute fallback.
     folder = prefix
     try:
         entries = await asyncio.to_thread(
             lambda: storage.admin().storage.from_(storage.MEDIA_BUCKET).list(folder) or []
         )
-        existing = [f"{folder}/{e.name}" for e in entries if getattr(e, "name", None)]
+        names = []
+        for e in entries:
+            name = e.get("name") if isinstance(e, dict) else getattr(e, "name", None)
+            if name:
+                names.append(name)
+        existing = [f"{folder}/{n}" for n in names]
     except Exception as e:
         log.warning("cleanup list failed for %s: %s", prefix, e)
         existing = keys
@@ -166,7 +172,7 @@ async def process_one(pool) -> bool:
     try:
         if handler is None:
             raise media.MediaError(f"Unknown job kind {kind!r}.")
-        with tempfile.TemporaryDirectory(prefix=f"media-{kind}-") as td:
+        with tempfile.TemporaryDirectory(prefix=f"media-{kind}-", ignore_cleanup_errors=True) as td:
             result = await handler(job, Path(td))
         await db.finish_job(pool, job, ok=True, asset_values=result.get("asset_values"))
         log.info("job %s done in %.1fs", job["id"], time.monotonic() - started)

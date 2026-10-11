@@ -622,6 +622,12 @@ input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit
 .lib-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-meta { font-size: 13px; color: var(--text-3); }
 .lib-actions { padding: 14px 16px 16px; display: flex; gap: 14px; align-items: center; }
+.lib-play { position: absolute; inset: 0; margin: auto; width: 52px; height: 52px; border: 0; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55); color: #fff; display: grid; place-items: center; cursor: pointer;
+  opacity: 0; transition: opacity 0.15s, transform 0.15s; transform: scale(0.92); }
+.lib-thumb:hover .lib-play, .lib-play:focus-visible { opacity: 1; transform: scale(1); }
+.lib-play svg { margin-left: 2px; }
+.lib-player { width: 100%; max-height: 64vh; border-radius: 14px; background: #000; }
 
 /* ---------- projects ---------- */
 .proj-table { border-radius: 18px; overflow: visible; background: var(--surface); }
@@ -644,6 +650,7 @@ input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit
 
 .modal-bg { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; padding: 16px; }
 .modal { width: 100%; max-width: 420px; padding: 28px; border-radius: 20px; background: var(--surface-2); display: grid; gap: 10px; }
+.modal-wide { max-width: 900px; }
 .modal-title { font-size: 21px; font-weight: 600; line-height: 1.25; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { api } from "../lib/api.js";
 import { addVideos, refreshLibrary, removeVideo, useLibrary } from "../lib/libraryStore.js";
 import { langName } from "../lib/catalog.js";
 import { ago, bytes, clock } from "../lib/format.js";
@@ -14,6 +15,14 @@ const STATUS_LABEL = {
   FAILED: "Failed",
 };
 
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor">
+      <path d="M8 5.14v13.72c0 .8.87 1.3 1.56.88l11.03-6.86c.65-.4.65-1.35 0-1.76L9.56 4.26A1.02 1.02 0 0 0 8 5.14Z" />
+    </svg>
+  );
+}
+
 export default function Library() {
   const nav = useNavigate();
   const input = useRef(null);
@@ -22,8 +31,33 @@ export default function Library() {
   const [drag, setDrag] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null); // { name, phase, pct } while an upload runs
+  const [preview, setPreview] = useState(null); // { name, url, loading } while a player is open
 
   useEffect(() => { refreshLibrary(); }, []);
+
+  // Close the preview on Escape.
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e) => e.key === "Escape" && setPreview(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [preview]);
+
+  /** Local items play their object URL; cloud items get a fresh signed proxy URL. */
+  async function openPreview(v) {
+    if (v.local) {
+      setPreview({ name: v.name, url: v.url });
+      return;
+    }
+    setPreview({ name: v.name, url: null, loading: true });
+    try {
+      const { url } = await api.previewUrl(v.id);
+      setPreview({ name: v.name, url });
+    } catch (e) {
+      setPreview(null);
+      setError(e.message);
+    }
+  }
 
   const items = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -92,6 +126,11 @@ export default function Library() {
                   {v.remote && v.status && v.status !== "READY" && (
                     <span className="lib-badge">{STATUS_LABEL[v.status] || v.status}</span>
                   )}
+                  {(v.local || v.proxy_status === "READY") && (
+                    <button className="lib-play" aria-label={`Preview ${v.name}`} onClick={() => openPreview(v)}>
+                      <PlayIcon />
+                    </button>
+                  )}
                 </div>
                 <div className="lib-info">
                   <span className="lib-name" title={v.name}>{v.name}</span>
@@ -101,10 +140,13 @@ export default function Library() {
                 </div>
                 <div className="lib-actions">
                   <button className="btn btn-quiet btn-sm" disabled={!v.local}
-                          title={v.local ? undefined : v.remote ? "Start a project once this video is ready." : "Sample item. Upload a video to use it."}
+                          title={v.local ? undefined : v.remote ? "Starting a project from a cloud video isn't supported yet." : "Sample item. Upload a video to use it."}
                           onClick={() => nav("/new", { state: { libraryId: v.id } })}>
                     New project
                   </button>
+                  {(v.local || v.proxy_status === "READY") && (
+                    <button className="link-btn body-sm" onClick={() => openPreview(v)}>Preview</button>
+                  )}
                   {(v.local || v.remote) && (
                     <button className="link-btn body-sm" onClick={() => removeVideo(v.id)}>Remove</button>
                   )}
@@ -115,6 +157,27 @@ export default function Library() {
         </div>
         {items.length === 0 && <p className="muted" style={{ textAlign: "center", padding: 48 }}>No videos match “{q}”.</p>}
       </div>
+
+      <AnimatePresence>
+        {preview && (
+          <motion.div className="modal-bg" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                      onClick={() => setPreview(null)}>
+            <motion.div className="modal modal-wide" role="dialog" aria-modal="true" aria-label={`Preview ${preview.name}`}
+                        initial={{ scale: 0.97, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.97, opacity: 0 }}
+                        onClick={(e) => e.stopPropagation()}>
+              <h2 className="modal-title" style={{ fontSize: 17 }}>{preview.name}</h2>
+              {preview.url ? (
+                <video className="lib-player" src={preview.url} controls autoPlay playsInline />
+              ) : (
+                <p className="muted body-sm" role="status">Preparing the preview…</p>
+              )}
+              <div className="modal-actions">
+                <button className="btn btn-quiet" onClick={() => setPreview(null)} autoFocus>Close</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

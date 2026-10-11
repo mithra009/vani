@@ -91,6 +91,63 @@ This doc records every problem found in this session, its root cause, and the fi
 
 ---
 
+## Problem 6 — `PermissionError [WinError 32]` on freshly-written derivatives (Windows lock race)
+
+**Symptom (next run, after Problem 5's fixes):** probe reached `DONE`, but thumbnail/proxy failed with `PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: '…\media-thumbnail-…\thumb.jpg'` (and `proxy.mp4`). Leftover `media-*` temp dirs in `%TEMP%`; storage still only had `source.mp4`.
+
+**Root cause:** Windows file-lock race. Right after ffmpeg writes the derivative into `%TEMP%`, **Windows Defender real-time scanning takes a handle** to the new file. The immediately-following open for upload hits a sharing violation, and the same lock makes `TemporaryDirectory` cleanup fail. Identical timing on every retry → consistent failures. Aggravated by storage3 opening the path itself (`open(file, "rb")` at `file_api.py:570`) without closing the handle.
+
+**Fix:**
+- `storage.py:upload_file` now reads the file into **bytes** with a short retry (`_read_with_retry`: 5 tries × 250 ms on `PermissionError`/`OSError`) and passes `bytes` to `.upload()` — accepted natively, sidesteps the lock and storage3's leaked handle.
+- `worker.py`: `TemporaryDirectory(..., ignore_cleanup_errors=True)` (Python ≥3.10) so locked-file cleanup can never fail an already-successful job.
+- Regression tests: bytes payload + retry-once-then-succeed + raises-after-exhausting.
+
+---
+
+## Problem 7 — cleanup job removed 0 objects (dict vs attribute)
+
+**Symptom:** While resetting jobs, the asset turned out to be soft-deleted (user clicked Remove) with a `DONE` cleanup job — but `source.mp4` was still in storage.
+
+**Root cause:** `handle_cleanup` read entry names via `getattr(e, "name", None)`. storage3's `list()` returns **dicts**, so every name came back `None`, `existing` was empty, and `remove([])` did nothing.
+
+**Fix:** `worker.py:handle_cleanup` now reads `e["name"]` for dicts with an attribute fallback; leftover object removed and the soft-deleted row hard-deleted as one-time recovery.
+
+---
+
+## Problem 8 — `TypeError: Header value must be str or bytes, not <class 'bool'>` (storage3 quirk)
+
+**Symptom (next run, after Problem 6/7 fixes):** probe `DONE`, but thumbnail/proxy jobs crashed with `TypeError: Header value must be str or bytes, not <class 'bool'>` from httpx, deep inside storage3's `_upload_or_update`.
+
+**Root cause:** `storage.py` passed `"upsert": True` (Python **bool**) in the file options. storage3 copies option values **straight into HTTP headers** (`options["x-upsert"] = upsert` at `file_api.py:533-535`), and httpx rejects non-`str`/`bytes` header values. Every earlier bug (arg order, jsonb, Windows lock) had blocked the path before this line was reached — it only surfaced once uploads finally got that far. Tests missed it because the regression test fakes the bucket client and never exercises storage3's real option-to-header conversion.
+
+**Fix:**
+- `storage.py:upload_file`: `"upsert": "true"` (string) instead of `True`.
+- Regression test tightened: asserts **all option values passed to upload are strings**.
+- Reset thumbnail/proxy jobs for `af1fad98` (`WhatsApp Video…` — probe already DONE, metadata kept READY).
+- Full suite: **97 passed**.
+
+---
+
+## Problem 9 — No way to preview a cloud video from the Library
+
+**Symptom:** Processing completed (thumbnail + proxy `READY`), but the Library card offered only **Remove** — no play action existed for cloud items, and `New project` stays disabled for them by design (NewProject needs a local `File`).
+
+**Fix (frontend only):**
+- `Library.jsx`: play overlay on the thumbnail + **Preview** action for local items and cloud items with `proxy_status === "READY"`. Cloud preview fetches a fresh signed proxy URL from `GET /api/assets/{id}/preview-url` at click time (avoids expiry); local items play their object URL. Player modal (Escape / backdrop to close, "Preparing the preview…" while the URL loads, errors surface in the page banner).
+- `styles.css`: `.lib-play` (hover/focus overlay), `.lib-player` (max-height 64vh), `.modal-wide` (900px).
+- Honest tooltip on the disabled cloud **New project**: "Starting a project from a cloud video isn't supported yet."
+- `vite build` clean. Backend untouched.
+
+---
+
+## State at hand-off (final)
+
+- All fixes in place (Problems 1–8); regression suite green.
+- Latest asset `af1fad98` (`WhatsApp Video 2026-10-10 at 23.12.49.mp4`): probe DONE, thumbnail/proxy reset to `PENDING`/`attempts=0` — will complete on next worker start.
+- No services running (user starts them manually).
+
+---
+
 ## Operational notes
 
 - **Ports:** backend `:8010`, media `:8020`, Vite `:5173` (listens on `[::1]` only — use `localhost`, not `127.0.0.1`).
