@@ -106,3 +106,13 @@ Tests:
 
 ## Responsible use
 Only dub videos you own or have permission to use. Only clone a voice with its owner's consent. Cloned output is labelled as AI-generated. Demo material uses self-recorded, synthetic content only.
+
+
+```
+system startup
+
+.venv\Scripts\python -m uvicorn backend.app.main:app --port 8010
+.venv\Scripts\python -m uvicorn media_service.main:app --port 8020
+.venv\Scripts\python -m media_service.worker
+(Vite should still be up — npm run dev in frontend/ if not.)
+```
