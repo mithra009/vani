@@ -2,6 +2,7 @@
 
     python -m editor_service.worker
 
+export:   one ffmpeg render of a timeline snapshot (phase 3).
 generate: extract audio → (clean narration) → STT → Gemini chunk + emotion → translate → place,
           then one `tts` job per chunk (queued in the same transaction as the chunks).
 tts:      one chunk's speech, content-addressed so an unchanged chunk is never paid for twice.
@@ -16,6 +17,7 @@ import asyncio
 import io
 import json
 import logging
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -24,9 +26,9 @@ import soundfile as sf
 
 from backend.app import media as amedia
 from media_service import storage
-from . import chunking, db, keys, placement, providers
+from . import chunking, db, export, keys, placement, providers
 from .config import (
-    CHUNK_LLM_ATTEMPTS, DEFAULT_CPS, JOB_MAX_ATTEMPTS, MAX_VIDEO_SECONDS, SCRIPT_GAP_S,
+    CHUNK_LLM_ATTEMPTS, DEFAULT_CPS, EXPORT_TIMEOUT_SECONDS, JOB_MAX_ATTEMPTS, MAX_VIDEO_SECONDS, SCRIPT_GAP_S,
     WORKER_POLL_SECONDS, WORKER_REAP_SECONDS, WORKER_STALE_JOB_SECONDS, check_providers,
 )
 from .errors import EditorError, InputInvalid, MediaFailed, OutputInvalid, Skip, StorageUnavailable
@@ -186,7 +188,111 @@ async def handle_tts(pool, job: dict, project: dict, workdir: Path) -> None:
         raise Skip(f"chunk {chunk['id']} was edited while its audio was generating")
 
 
-HANDLERS = {"generate": handle_generate, "tts": handle_tts}
+# ------------------------------------------------------------------ export
+
+async def run_ffmpeg(args: list[str], cwd: Path, duration: float, on_progress) -> None:
+    """ffmpeg with -progress on stdout. Non-zero exit or timeout → MediaFailed with stderr's tail."""
+    proc = await asyncio.create_subprocess_exec(
+        amedia_bin("ffmpeg"), *args, cwd=str(cwd),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    stderr_task = asyncio.create_task(proc.stderr.read())
+    last = 0.0
+
+    async def pump():
+        nonlocal last
+        async for raw in proc.stdout:
+            line = raw.decode(errors="replace").strip()
+            if line.startswith("out_time_us=") or line.startswith("out_time_ms="):
+                try:
+                    done = int(line.split("=", 1)[1]) / 1e6
+                except ValueError:
+                    continue                                   # "N/A" before the first frame
+                if duration > 0 and time.monotonic() - last > 1.0:
+                    last = time.monotonic()
+                    await on_progress(min(0.99, done / duration))
+
+    try:
+        await asyncio.wait_for(asyncio.gather(pump(), proc.wait()), timeout=EXPORT_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise MediaFailed(f"The export took longer than {EXPORT_TIMEOUT_SECONDS // 60} minutes and was stopped.", "export_timeout")
+    err = (await stderr_task).decode(errors="replace").strip()
+    if proc.returncode != 0:
+        raise MediaFailed(f"ffmpeg failed ({proc.returncode}): {err[-800:]}", "export_failed")
+
+
+def amedia_bin(name: str) -> str:
+    return shutil.which(name) or name
+
+
+async def handle_export(pool, job: dict, project: dict, workdir: Path) -> None:
+    ex = await db.get_export(pool, job["export_id"])
+    if ex["status"] == "ready":
+        raise Skip("export already rendered")
+    await db.export_progress(pool, ex["id"], 0.0)
+    snap = ex["snapshot"]
+
+    src = await download(project["asset_key"], workdir / ("source" + Path(project["asset_key"]).suffix))
+    info = await _ff(amedia.probe, src)
+    if not info["has_video"]:
+        raise MediaFailed("The source video can't be read.", "source_invalid")
+    height = await _ff(source_height, src)
+
+    chunk_paths: dict[str, str] = {}
+    for c in snap["chunks"]:
+        if c.get("audio_key"):
+            p = workdir / f"chunk_{c['id']}.wav"
+            await download(c["audio_key"], p)
+            chunk_paths[str(c["id"])] = p.name
+    media_paths: dict[str, str] = {}
+    for m in snap["media"]:
+        p = workdir / f"music_{m['id']}{Path(m['storage_key']).suffix}"
+        await download(m["storage_key"], p)
+        media_paths[str(m["id"])] = p.name
+
+    plan, warnings, caps = export.plan_from_snapshot(
+        snap, fmt=ex["format"], height=ex["height"], audio_mix=ex["audio_mix"], source=src.name,
+        source_has_audio=info["has_audio"], source_height=height, chunk_paths=chunk_paths, media_paths=media_paths,
+    )
+    owner = str(project["owner_id"])
+    captions_key = None
+    if ex["captions"] != "none":
+        kind = "srt" if ex["captions"] == "burn" else ex["captions"]
+        text = export.captions_file(caps, kind)
+        (workdir / f"captions.{kind}").write_text(text, encoding="utf-8")
+        if ex["captions"] == "burn":
+            plan.burn_captions = "captions.srt"
+        else:
+            captions_key = f"{owner}/exports/{ex['id']}.{kind}"
+            await upload_bytes(text.encode(), captions_key, "application/x-subrip" if kind == "srt" else "text/vtt", workdir)
+
+    out = f"export.{ex['format']}"
+    await run_ffmpeg(export.build_args(plan, out), workdir, plan.duration,
+                     lambda p: db.export_progress(pool, ex["id"], p))
+    probe_out = await _ff(amedia.probe, workdir / out)
+    if abs(probe_out["duration"] - plan.duration) > 0.1:
+        raise MediaFailed(f"Rendered {probe_out['duration']:.2f}s but the timeline is {plan.duration:.2f}s.", "export_invalid")
+    output_key = f"{owner}/exports/{ex['id']}.{ex['format']}"
+    try:
+        await asyncio.to_thread(storage.upload_file, str(workdir / out), output_key, export.content_type(ex["format"]))
+    except Exception as e:
+        raise StorageUnavailable(f"Couldn't write {output_key} to storage: {type(e).__name__}: {e}") from e
+    await db.export_done(pool, ex["id"], output_key, captions_key, warnings)
+    log.info("export %s ready: %s, %.1fs, %d warning(s)", ex["id"], ex["format"], plan.duration, len(warnings))
+
+
+def source_height(path: Path) -> int:
+    out = amedia.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=height",
+                      "-of", "csv=p=0", str(path)])
+    try:
+        return int(out.strip().splitlines()[0])
+    except (ValueError, IndexError) as e:
+        raise amedia.MediaError(f"Couldn't read the video height: {out!r}") from e
+
+
+HANDLERS = {"generate": handle_generate, "tts": handle_tts, "export": handle_export}
 
 
 # ------------------------------------------------------------------ loop
@@ -203,6 +309,8 @@ async def record_failure(pool, job: dict, err: EditorError | Exception) -> None:
     log.error("job %s %s failed permanently [%s]: %s", job["id"], job["kind"], code, err)
     if job["kind"] == "generate":
         await db.fail_project(pool, job["project_id"], code, msg)
+    elif job["kind"] == "export":
+        await db.export_failed(pool, job["export_id"], code, msg)
     else:
         await db.chunk_failed(pool, job["chunk_id"], job["chunk_revision"], code, msg)
 
@@ -236,8 +344,15 @@ async def process_one(pool) -> bool:
 async def main() -> None:
     check_providers()
     pool = await db.connect()
+    try:
+        await db.check_schema(pool)
+    except RuntimeError as e:
+        log.error("%s", e)
+        await pool.close()
+        raise SystemExit(1)
     log.info("editor worker ready (fake providers: %s)", providers.FAKE_PROVIDERS)
     last_reap = float("-inf")
+    errors = 0
     try:
         while True:
             try:
@@ -246,10 +361,15 @@ async def main() -> None:
                     for j in await db.requeue_stale_jobs(pool, WORKER_STALE_JOB_SECONDS):
                         log.warning("requeued stale job %s kind=%s (attempt %s)", j["id"], j["kind"], j["attempts"])
                 worked = await process_one(pool)
+                errors = 0
             except Exception:
                 # DB unreachable etc. The job (if any) stays RUNNING and the reaper requeues it.
-                log.exception("worker loop error")
-                worked = False
+                # Back off so a persistent fault is logged every ~minute, not every poll.
+                errors += 1
+                if errors <= 3 or errors % 20 == 0:
+                    log.exception("worker loop error (%d in a row)", errors)
+                await asyncio.sleep(min(60.0, WORKER_POLL_SECONDS * 2 ** min(errors, 7)))
+                continue
             if not worked:
                 await asyncio.sleep(WORKER_POLL_SECONDS)
     finally:

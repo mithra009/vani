@@ -139,9 +139,10 @@ export default function Library() {
                   </span>
                 </div>
                 <div className="lib-actions">
-                  <button className="btn btn-quiet btn-sm" disabled={!v.local}
-                          title={v.local ? undefined : v.remote ? "Starting a project from a cloud video isn't supported yet." : "Sample item. Upload a video to use it."}
-                          onClick={() => nav("/new", { state: { libraryId: v.id } })}>
+                  <button className="btn btn-quiet btn-sm" disabled={!v.local && !(v.remote && v.status === "READY")}
+                          title={v.local || (v.remote && v.status === "READY") ? undefined
+                            : v.remote ? "Wait for processing to finish." : "Sample item. Upload a video to use it."}
+                          onClick={() => v.remote ? nav(`/new?asset=${v.id}`) : nav("/new", { state: { libraryId: v.id } })}>
                     New project
                   </button>
                   {(v.local || v.proxy_status === "READY") && (

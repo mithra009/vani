@@ -16,8 +16,11 @@ from fastapi.responses import JSONResponse
 
 from . import db
 from .config import ALLOWED_ORIGINS, DATABASE_URL, EDITOR_API_PORT, FAKE_PROVIDERS, check_providers
+from .db import VersionConflict
 from .errors import EditorError
 from .routes import router
+from .routes_export import router as export_router
+from .routes_timeline import router as timeline_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("editor.api")
@@ -29,6 +32,12 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("DATABASE_URL must be set in .env (Supabase direct/session pooler).")
     check_providers()
     app.state.pool = await db.connect()
+    try:
+        await db.check_schema(app.state.pool)
+    except RuntimeError as e:
+        log.error("%s", e)
+        await app.state.pool.close()
+        raise
     log.info("editor service ready (fake providers: %s)", FAKE_PROVIDERS)
     yield
     await app.state.pool.close()
@@ -43,6 +52,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router)
+app.include_router(timeline_router)
+app.include_router(export_router)
+
+
+@app.exception_handler(VersionConflict)
+async def version_conflict(_: Request, e: VersionConflict):
+    return JSONResponse({"code": "version_conflict", "message": str(e), **e.current}, status_code=409)
 
 
 @app.exception_handler(EditorError)

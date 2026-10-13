@@ -4,6 +4,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import * as editor from "../lib/editorApi.js";
 import { TARGET_LANGS, VOICES, langName, voicesFor } from "../lib/catalog.js";
 import { clock } from "../lib/format.js";
+import TimelineEditor from "../components/TimelineEditor.jsx";
+import ExportPanel from "../components/ExportPanel.jsx";
+import NarrationTake from "../components/NarrationTake.jsx";
 
 // ─────────────────────────────────── Editor page ──────────────────────────────
 // Shows one editor project: header, chunk list, voice picker.
@@ -31,7 +34,8 @@ export default function EditorProject() {
   const nav = useNavigate();
   const [data, setData] = useState(null);           // { project, chunks }
   const [error, setError] = useState(null);
-  const [sseOk, setSseOk] = useState(false);
+  const [sseOk, setSseOk] = useState(true);
+  const [tab, setTab] = useState("chunks");
 
   // Fetch once, then let SSE drive updates.
   useEffect(() => {
@@ -45,9 +49,9 @@ export default function EditorProject() {
   // SSE subscription — reconnects automatically.
   useEffect(() => {
     const unsub = editor.subscribe(id, {
-      onSnapshot(snap) { setData(snap); setSseOk(true); },
+      onSnapshot(snap) { setData(snap); },
       onError(e) { setError(e.message || "Live update error."); },
-      onHeartbeat() { setSseOk(true); },
+      onConnection: setSseOk,
     });
     return unsub;
   }, [id]);
@@ -70,7 +74,15 @@ export default function EditorProject() {
 
   return (
     <>
-      <ProjectHeader project={project} onDelete={() => { editor.deleteProject(id).then(() => nav("/projects")); }} />
+      <ProjectHeader project={project} onDelete={() => {
+        if (!window.confirm(`Delete "${project.name}"?`)) return;
+        editor.deleteProject(id).then(() => nav("/projects")).catch((e) => setError(`Delete failed: ${e.message}`));
+      }} />
+      {!sseOk && (
+        <section className="page" style={{ paddingTop: 0, paddingBottom: 0 }}>
+          <div className="banner warn" role="status"><span className="banner-dot" /><span>Live updates paused — reconnecting…</span></div>
+        </section>
+      )}
       {project.error_message && (
         <section className="page" style={{ paddingTop: 0, paddingBottom: 0 }}>
           <div className="banner error" role="alert">
@@ -89,8 +101,21 @@ export default function EditorProject() {
         </section>
       )}
       <section className="page" style={{ paddingTop: 0 }}>
-        <VoicePicker project={project} />
-        <ChunkList project={project} chunks={chunks} />
+        {project.status === "awaiting_narration" ? (
+          <NarrationTake project={project} />
+        ) : (
+          <>
+            <div className="editor-tabs" role="tablist">
+              {[["chunks", "Chunks"], ["timeline", "Timeline"], ["export", "Export"]].map(([k, label]) => (
+                <button key={k} role="tab" aria-selected={tab === k} className={`editor-tab ${tab === k ? "on" : ""}`}
+                        onClick={() => setTab(k)}>{label}</button>
+              ))}
+            </div>
+            {tab === "chunks" && <><VoicePicker project={project} /><ChunkList project={project} chunks={chunks} /></>}
+            {tab === "timeline" && <TimelineEditor project={project} chunks={chunks} />}
+            {tab === "export" && <ExportPanel project={project} />}
+          </>
+        )}
       </section>
     </>
   );

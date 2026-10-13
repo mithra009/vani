@@ -125,3 +125,15 @@ create policy "artifacts_select_own" on public.artifacts
 drop policy if exists "editor_jobs_select_own" on public.editor_jobs;
 create policy "editor_jobs_select_own" on public.editor_jobs
   for select using (auth.uid() = owner_id);
+
+-- ------------------------------------------------------------------ storage
+-- The media bucket (002) only accepts video + jpeg, and Storage enforces that even for the
+-- service role. The editor stores chunk WAVs, STT JSON and the narration take there too.
+update storage.buckets
+set allowed_mime_types = array(
+  select distinct unnest(coalesce(allowed_mime_types, '{}') || array[
+    'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4',
+    'application/json'
+  ])
+)
+where id = 'media';

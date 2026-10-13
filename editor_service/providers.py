@@ -26,6 +26,7 @@ LANG_NAMES = {
     "te-IN": "Telugu (Telugu script)", "kn-IN": "Kannada (Kannada script)", "ml-IN": "Malayalam (Malayalam script)",
     "mr-IN": "Marathi (Devanagari script)", "bn-IN": "Bengali (Bengali script)", "gu-IN": "Gujarati (Gujarati script)",
     "pa-IN": "Punjabi (Gurmukhi script)",
+    "hi-en": "Hinglish (Hindi with natural English words, written in Roman script)",
 }
 
 _STATUS_RE = re.compile(r"Gnani (\d{3})")

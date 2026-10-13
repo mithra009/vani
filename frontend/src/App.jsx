@@ -10,6 +10,8 @@ import Library from "./pages/Library.jsx";
 import Projects from "./pages/Projects.jsx";
 import Job from "./pages/Job.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
+import EditorProject from "./pages/Editor.jsx";
+import NewEditorProject from "./pages/NewEditorProject.jsx";
 
 export default function App() {
   const [mode, setMode] = useState(null);
@@ -60,9 +62,14 @@ function Shell({ mode }) {
             <Route path="/signin" element={signedIn && gated ? <Navigate to="/" replace /> : <AuthPage />} />
             <Route path="/signup" element={signedIn && gated ? <Navigate to="/" replace /> : <AuthPage />} />
             <Route path="/" element={<Protected ok={signedIn}><Landing mode={mode} /></Protected>} />
-            <Route path="/new" element={<Protected ok={signedIn}><NewProject mode={mode} /></Protected>} />
+            <Route path="/new" element={<Protected ok={signedIn}>
+              {/* Live: projects start from Library videos in the cloud (editor service). Demo: in-browser flow. */}
+              {mode === "live" ? <NewEditorProject /> : <NewProject mode={mode} />}
+            </Protected>} />
             <Route path="/library" element={<Protected ok={signedIn}><Library /></Protected>} />
             <Route path="/projects" element={<Protected ok={signedIn}><Projects /></Protected>} />
+            <Route path="/editor/new" element={<Protected ok={signedIn}><NewEditorProject /></Protected>} />
+            <Route path="/editor/:id" element={<Protected ok={signedIn}><EditorProject /></Protected>} />
             <Route path="/jobs/:id" element={<Protected ok={signedIn}><Job mode={mode} /></Protected>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
