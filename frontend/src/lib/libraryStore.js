@@ -74,7 +74,7 @@ export async function refreshLibrary() {
  * "file" part, the publishable key as apikey, the user's JWT as Authorization, and the
  * upload token only in the URL query string. A POST here would hit the *create-sign*
  * endpoint instead and silently store nothing. */
-function uploadToStorage(file, uploadUrl, onProgress) {
+export function uploadToStorage(file, uploadUrl, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", uploadUrl);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { api } from "../lib/api.js";
+import * as editorApi from "../lib/editorApi.js";
 import { langName } from "../lib/catalog.js";
 import { ago, clock } from "../lib/format.js";
 
@@ -95,6 +96,8 @@ export default function Projects() {
         {jobs && <span className="pj-count">{jobs.length}</span>}
       </div>
 
+      <EditorProjects />
+
       <div className="pj-bar">
         <div className="seg-control" role="group" aria-label="Filter projects">
           {FILTERS.map(([k, label]) => (
@@ -184,6 +187,40 @@ export default function Projects() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+const EDITOR_STATUS = {
+  draft: "Draft", awaiting_narration: "Waiting for narration", generating: "Generating",
+  editing: "Ready to edit", failed: "Failed",
+};
+
+/** Projects from the editor service (timeline editor), listed above the dubbing jobs. */
+function EditorProjects() {
+  const [list, setList] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    editorApi.listProjects().then(setList).catch((e) => setErr(e.message));
+  }, []);
+  if (err) return <div className="banner error" role="alert"><span className="banner-dot" />Editor projects couldn't load: {err}</div>;
+  if (!list) return null;
+  return (
+    <div className="pj-editor">
+      <div className="pj-editor-head">
+        <h2 className="field-label">Editor projects</h2>
+        <Link to="/editor/new" className="link-btn">New editor project</Link>
+      </div>
+      {list.length === 0 && <p className="dim body-sm">None yet.</p>}
+      {list.map((p) => (
+        <Link key={p.id} to={`/editor/${p.id}`} className="pj-editor-row">
+          <span className="pj-editor-name">{p.name}</span>
+          <span className="body-sm dim">{langName(p.src_lang)} to {langName(p.tgt_lang)}</span>
+          {p.duration_s != null && <span className="mono dim">{clock(p.duration_s)}</span>}
+          <span className={`status-pill status-${p.status}`}>{EDITOR_STATUS[p.status] || p.status}</span>
+          <span className="body-sm dim">{ago(Date.parse(p.created_at))}</span>
+        </Link>
+      ))}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react";
 // More specific prefixes (/api/uploads, /api/assets) must be listed BEFORE /api.
 const apiPort = process.env.API_PORT || "8010";
 const mediaPort = process.env.MEDIA_API_PORT || "8020";
+const editorPort = process.env.EDITOR_API_PORT || "8030";
 
 export default defineConfig(({ mode }) => {
   // Read the repo-root .env, but expose ONLY the two public Supabase values to the browser.
@@ -20,6 +21,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
+        "/api/editor": `http://127.0.0.1:${editorPort}`,
         "/api/uploads": `http://127.0.0.1:${mediaPort}`,
         "/api/assets": `http://127.0.0.1:${mediaPort}`,
         "/api": `http://127.0.0.1:${apiPort}`,

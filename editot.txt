@@ -1,0 +1,19 @@
+# Input
+
+1.extract audio of the video *
+2.if user wants to procced with auido present in the video  -> stt -> translate to the preferred lang, detect emotions using gemini ( should support swtiching the language - future item) 
+    and use tts to generate the audio the in selected lang with selected voice, ( voice can be changed any time)
+3.else if procceds with the script uploaded -> translationif required, emotion detection using gemini,
+    and use tts to generate the audio the in selected lang with selected voice, ( voice can be changed any time)
+4.else user narrates the text, record it thorough, auido processing ( noice reduction, voice amplification) -> STT -> rest same as 1. 
+
+# Video - Audio alignment 
+
+1. Text ( speech ) will be broken into small chunk, so that the user can adjust the emotion, speed, edit the text ... 
+    chunks will be provided by gemini by cutting the right chunks based on emotion, voice modulation 
+2. Trim, split, merge, audio overlap ... other video and audio editing services 
+3.separate tracks for audio and video with timeline , 
+
+# Export 
+
+1. Option to download in multiple formats of multiple resolution, 

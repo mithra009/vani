@@ -1,0 +1,80 @@
+# Whole app in one go:
+#     docker compose up --build            → http://localhost:8080
+#
+# Reads secrets from .env (never baked into images). Postgres, Auth and Storage are Supabase,
+# so DATABASE_URL must be the direct connection (:5432) or session pooler, not :6543.
+# Apply supabase/migrations/001…006 once in the Supabase SQL editor before the first start.
+#
+# FAKE_PROVIDERS defaults to 1 (no Gnani/Gemini calls, no credits). For a real run:
+#     FAKE_PROVIDERS=0 docker compose up        (PowerShell: $env:FAKE_PROVIDERS="0"; docker compose up)
+
+x-python: &python
+  build: .
+  image: vani-python:latest
+  env_file: .env
+  restart: unless-stopped
+  environment: &python-env
+    FAKE_PROVIDERS: ${FAKE_PROVIDERS:-1}
+    FFMPEG_BIN_DIR: ""                       # .env may hold a Windows path; ffmpeg is on PATH here
+    ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+
+x-healthcheck: &health
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 20s
+
+services:
+  backend:
+    <<: *python
+    command: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8010
+    volumes:
+      - vani-storage:/app/storage            # jobs, media, paid-result cache
+    healthcheck:
+      <<: *health
+      test: ["CMD", "curl", "-fsS", "http://localhost:8010/api/health"]
+
+  media-api:
+    <<: *python
+    command: python -m uvicorn media_service.main:app --host 0.0.0.0 --port 8020
+    healthcheck:
+      <<: *health
+      test: ["CMD", "curl", "-fsS", "http://localhost:8020/api/health"]
+
+  media-worker:
+    <<: *python
+    command: python -m media_service.worker
+    depends_on:
+      media-api: { condition: service_healthy }
+
+  editor-api:
+    <<: *python
+    command: python -m uvicorn editor_service.main:app --host 0.0.0.0 --port 8030
+    healthcheck:
+      <<: *health
+      test: ["CMD", "curl", "-fsS", "http://localhost:8030/api/editor/health"]
+
+  editor-worker:
+    <<: *python
+    restart: on-failure:3                    # a missing migration exits once with a clear message
+    command: python -m editor_service.worker
+    depends_on:
+      editor-api: { condition: service_healthy }
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        SUPABASE_URL: ${SUPABASE_URL:-}
+        SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+    image: vani-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      backend: { condition: service_healthy }
+      media-api: { condition: service_healthy }
+      editor-api: { condition: service_healthy }
+
+volumes:
+  vani-storage:

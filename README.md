@@ -51,6 +51,49 @@ video ─► extract audio ─► Prisma v2.5 Batch STT ─► detect each line'
 
 ## Setup and running
 
+### Everything at once (Docker)
+
+Needs Docker Desktop running. Postgres, Auth and Storage stay on Supabase; Docker runs the
+six app processes: `backend` (:8010), `media-api` (:8020) + `media-worker`,
+`editor-api` (:8030) + `editor-worker`, and `frontend` (nginx on :8080, proxying `/api`).
+
+1. **`.env` at the repo root** with at least `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
+   `SUPABASE_SECRET_KEY` and `DATABASE_URL`. `DATABASE_URL` must be the direct connection
+   (:5432) or the session pooler, **not** the transaction pooler (:6543). Add `GNANI_API_KEY`
+   and `GOOGLE_API_KEY` only for real (paid) runs. `.env` is read at runtime and never copied
+   into an image.
+2. **Apply the migrations once**, in order, in Supabase → SQL Editor: paste and run each file in
+   `supabase/migrations/` (`001` … `006`). They are safe to re-run. If one is missing, the editor
+   API and worker stop at startup and name the file to apply.
+3. **Start:**
+   ```
+   docker compose up --build
+   ```
+   Open http://localhost:8080. If Supabase Auth restricts redirect URLs, add
+   `http://localhost:8080` there.
+
+**Credits:** every service runs with fake providers by default (`FAKE_PROVIDERS=1`): no Gnani or
+Gemini calls, no credits. For a real run:
+```
+# PowerShell
+$env:FAKE_PROVIDERS="0"; docker compose up --build
+# bash
+FAKE_PROVIDERS=0 docker compose up --build
+```
+
+Useful commands:
+```
+docker compose up -d --build          # run in the background
+docker compose logs -f editor-worker  # follow one service
+docker compose ps                     # health of each service
+docker compose up --build frontend    # rebuild after frontend changes
+docker compose down                   # stop (add -v to also delete the backend's storage volume)
+```
+
+The backend's `storage/` (jobs, media, paid-result cache) lives in the `vani-storage` volume.
+The frontend waits until the three APIs report healthy, so a failing API keeps it from starting:
+check `docker compose ps` and that service's logs.
+
 ### Frontend (React + Vite)
 ```
 cd frontend
@@ -102,6 +145,30 @@ cleanup job after a short grace period.
 Tests:
 ```
 .venv\Scripts\python -m pytest media_service\tests
+```
+
+### Editor service (chunks, timeline, export)
+
+Design: `docs/design/PROJECT_EDITOR_DESIGN.md`. Needs the media service (videos come from
+the Library) and the same `DATABASE_URL`.
+
+```
+# 1. apply supabase/migrations/004_editor_projects.sql, 005_editor_timeline.sql,
+#    006_editor_exports.sql (SQL editor, in order)
+
+# 2. run the API (:8030) and the worker. FAKE_PROVIDERS defaults to 1 here:
+#    no Gnani/Gemini calls, no credits. Set FAKE_PROVIDERS=0 only for a pilot.
+.venv\Scripts\python -m uvicorn editor_service.main:app --port 8030
+.venv\Scripts\python -m editor_service.worker
+```
+
+The Vite dev server proxies `/api/editor/*` to :8030. Open **Editor** in the nav.
+
+Tests (the DB tests need a throwaway Postgres; they wipe it):
+```
+.venv\Scripts\python -m pytest editor_service\tests
+set DATABASE_URL_TEST=postgresql://postgres@127.0.0.1:5432/vani_test
+.venv\Scripts\python -m pytest editor_service\tests
 ```
 
 ## Responsible use
