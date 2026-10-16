@@ -19,7 +19,12 @@ async function http(path, opts = {}) {
   };
   const res = await fetch(`/api/editor${path}`, { ...opts, headers });
   if (res.status === 204) return null;
-  const body = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
+  const text = await res.text();
+  let body = null;
+  if (text && res.headers.get("content-type")?.includes("json")) {
+    try { body = JSON.parse(text); }
+    catch { if (res.ok) throw new Error(`The server sent an unreadable response (${res.status}).`); }
+  }
   if (res.status === 401) onUnauthorized();
   if (!res.ok) throw Object.assign(new Error(detail(body, res.status)), { code: body?.code, status: res.status });
   return body;

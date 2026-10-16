@@ -143,6 +143,24 @@ else:
     save_job, load_job, _list = _sqlite_save, _sqlite_load, _sqlite_list
 
 
+def delete_job(job_id: str) -> None:
+    """Remove the project document and its local files. Raises on a storage failure."""
+    if DB_BACKEND == "supabase":
+        from . import supa
+        with _flush_cv:
+            _dirty.pop(job_id, None)
+            _mem.pop(job_id, None)
+        supa.admin().table("projects").delete().eq("id", job_id).execute()
+    else:
+        with _lock:
+            _conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+            _conn.commit()
+    d = STORAGE / "jobs" / job_id
+    if d.exists():
+        import shutil
+        shutil.rmtree(d, ignore_errors=False)
+
+
 def list_jobs(user_id: str | None = None) -> list[dict]:
     """All projects (user_id=None, used for resuming work at startup) or one user's."""
     return _list(user_id)

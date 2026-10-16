@@ -60,72 +60,108 @@ export default function NewEditorProject() {
   }
 
   return (
-    <section className="page">
-      <h1 className="title">New project</h1>
+    <section className="page ne-page">
+      <header className="ne-head">
+        <h1 className="pg-title">New project</h1>
+        <p className="pg-sub">Choose a video, tell Vani what the voice should say, and pick the language and voice.</p>
+      </header>
 
-      <h2 className="field-label">1 · Video</h2>
-      {loaded === false && <div className="banner error"><span className="banner-dot" />Couldn't reach the Library. Is the media service running?</div>}
-      {loaded && videos.length === 0 && <p className="dim">No ready videos yet. <Link to="/library">Upload one in the Library</Link>.</p>}
-      {loaded && assetId && !asset && (
-        <p className="caption dim">That video isn't ready yet (or was removed). Pick another, or wait for processing to finish.</p>
-      )}
-      <div className="ne-videos">
-        {videos.map((v) => (
-          <button key={v.id} className={`ne-video ${assetId === v.id ? "on" : ""}`} onClick={() => setAssetId(v.id)}>
-            <span className="ne-thumb" style={{ background: v.cover || "var(--surface-2)" }} />
-            <span className="ne-video-name">{v.name}</span>
-            {v.duration_s && <span className="mono dim">{clock(v.duration_s)}</span>}
-          </button>
-        ))}
-      </div>
+      <Step n={1} title="Video" hint={asset ? asset.name : "Pick one of your Library videos."}>
+        {loaded === false && <div className="banner error"><span className="banner-dot" /><span>Couldn't reach the Library. Is the media service running?</span></div>}
+        {loaded && videos.length === 0 && (
+          <div className="ne-empty">No ready videos yet. <Link to="/library">Upload one in the Library</Link>.</div>
+        )}
+        {loaded && assetId && !asset && (
+          <p className="ne-note">That video isn't ready yet, or it was removed. Pick another one.</p>
+        )}
+        <div className="ne-videos">
+          {videos.map((v) => (
+            <button key={v.id} className={`ne-video ${assetId === v.id ? "on" : ""}`} onClick={() => setAssetId(v.id)}
+                    aria-pressed={assetId === v.id}>
+              <span className="ne-thumb" style={{ background: v.cover || "var(--surface-2)" }}>
+                {v.duration_s && <span className="ne-dur mono">{clock(v.duration_s)}</span>}
+              </span>
+              <span className="ne-video-name" title={v.name}>{v.name}</span>
+            </button>
+          ))}
+        </div>
+      </Step>
 
-      <h2 className="field-label">2 · What should the voice say?</h2>
-      <div className="ne-inputs">
-        {INPUTS.map((i) => (
-          <button key={i.id} className={`ne-input ${kind === i.id ? "on" : ""}`} onClick={() => setKind(i.id)}>
-            <strong>{i.title}</strong><span className="body-sm dim">{i.body}</span>
-          </button>
-        ))}
-      </div>
-      {kind === "script" && (
-        <>
-          <textarea className="input" rows={8} value={script} onChange={(e) => setScript(e.target.value)}
-                    placeholder="Paste or type the script…" style={{ marginTop: 12 }} />
-          <span className={`caption ${script.length > MAX_SCRIPT ? "" : "dim"}`}>{script.length.toLocaleString()} / {MAX_SCRIPT.toLocaleString()}</span>
-        </>
-      )}
-      {kind === "narration" && <p className="caption dim" style={{ marginTop: 8 }}>You'll record right after creating the project.</p>}
+      <Step n={2} title="What should the voice say?">
+        <div className="ne-inputs" role="radiogroup" aria-label="Input">
+          {INPUTS.map((i) => (
+            <button key={i.id} role="radio" aria-checked={kind === i.id} className={`ne-input ${kind === i.id ? "on" : ""}`}
+                    onClick={() => setKind(i.id)}>
+              <span className="ne-input-title">{i.title}</span>
+              <span className="ne-input-body">{i.body}</span>
+            </button>
+          ))}
+        </div>
+        {kind === "script" && (
+          <div className="ne-field" style={{ marginTop: 14 }}>
+            <label className="ne-label" htmlFor="ne-script">Script</label>
+            <textarea id="ne-script" className="input ne-textarea" rows={8} value={script}
+                      onChange={(e) => setScript(e.target.value)} placeholder="Paste or type the script…" />
+            <span className={`ne-count ${script.length > MAX_SCRIPT ? "over" : ""}`}>
+              {script.length.toLocaleString()} / {MAX_SCRIPT.toLocaleString()}
+            </span>
+          </div>
+        )}
+        {kind === "narration" && <p className="ne-note">You'll record your take right after creating the project.</p>}
+      </Step>
 
-      <h2 className="field-label">3 · Languages and voice</h2>
-      <div className="ne-row">
-        <label className="body-sm">{kind === "script" ? "Script language" : "Spoken language"}
-          <select className="select" value={src} onChange={(e) => setSrc(e.target.value)}>
-            {SRC.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
-          </select>
-        </label>
-        <label className="body-sm">Voice-over language
-          <select className="select" value={tgt} onChange={(e) => setTgt(e.target.value)}>
-            {TARGET_LANGS.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
-          </select>
-        </label>
-        <label className="body-sm">Voice
-          <select className="select" value={voice || ""} onChange={(e) => setVoice(e.target.value)}>
-            {voices.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.gender}</option>)}
-          </select>
-        </label>
-      </div>
-      <p className="caption dim">The language is fixed once the project is created; the voice can be changed any time.</p>
+      <Step n={3} title="Languages and voice" hint="The language is fixed once the project is created. The voice can be changed any time.">
+        <div className="ne-grid">
+          <div className="ne-field">
+            <label className="ne-label" htmlFor="ne-src">{kind === "script" ? "Script language" : "Spoken language"}</label>
+            <select id="ne-src" className="select" value={src} onChange={(e) => setSrc(e.target.value)}>
+              {SRC.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+            </select>
+          </div>
+          <div className="ne-field">
+            <label className="ne-label" htmlFor="ne-tgt">Voice-over language</label>
+            <select id="ne-tgt" className="select" value={tgt} onChange={(e) => setTgt(e.target.value)}>
+              {TARGET_LANGS.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+            </select>
+          </div>
+          <div className="ne-field">
+            <label className="ne-label" htmlFor="ne-voice">Voice</label>
+            <select id="ne-voice" className="select" value={voice || ""} onChange={(e) => setVoice(e.target.value)}>
+              {voices.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.gender}</option>)}
+            </select>
+          </div>
+        </div>
+      </Step>
 
-      <h2 className="field-label">4 · Name</h2>
-      <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+      <Step n={4} title="Name">
+        <div className="ne-field">
+          <label className="ne-label" htmlFor="ne-name">Project name</label>
+          <input id="ne-name" className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+        </div>
+      </Step>
 
-      {err && <div className="banner error" role="alert" style={{ marginTop: 16 }}><span className="banner-dot" /><span>{err}</span></div>}
-      <div style={{ marginTop: 20, display: "flex", gap: 12, alignItems: "center" }}>
-        <button className="btn btn-primary" onClick={create} disabled={busy || problems.length > 0}>
+      {err && <div className="banner error" role="alert" style={{ marginTop: 20 }}><span className="banner-dot" /><span>{err}</span></div>}
+      <div className="ne-submit">
+        <button className="btn btn-primary btn-ctl" onClick={create} disabled={busy || problems.length > 0}>
           {busy ? "Creating…" : kind === "narration" ? "Create and record" : "Create and generate"}
         </button>
-        {problems.length > 0 && <span className="caption dim">{problems[0]}</span>}
+        {problems.length > 0 && <span className="ne-note">{problems[0]}</span>}
       </div>
+    </section>
+  );
+}
+
+function Step({ n, title, hint, children }) {
+  return (
+    <section className="ne-step" aria-labelledby={`ne-step-${n}`}>
+      <div className="ne-step-head">
+        <span className="ne-step-n" aria-hidden="true">{n}</span>
+        <div>
+          <h2 id={`ne-step-${n}`} className="ne-step-title">{title}</h2>
+          {hint && <p className="ne-step-hint">{hint}</p>}
+        </div>
+      </div>
+      <div className="ne-step-body">{children}</div>
     </section>
   );
 }

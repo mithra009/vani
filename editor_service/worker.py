@@ -258,15 +258,15 @@ async def handle_export(pool, job: dict, project: dict, workdir: Path) -> None:
     )
     owner = str(project["owner_id"])
     captions_key = None
-    if ex["captions"] != "none":
-        kind = "srt" if ex["captions"] == "burn" else ex["captions"]
+    if ex["captions"] == "burn":
+        (workdir / "captions.ass").write_text(export.captions_ass(caps, export.output_height(plan)), encoding="utf-8")
+        plan.burn_captions = "captions.ass"
+    elif ex["captions"] != "none":
+        kind = ex["captions"]
         text = export.captions_file(caps, kind)
         (workdir / f"captions.{kind}").write_text(text, encoding="utf-8")
-        if ex["captions"] == "burn":
-            plan.burn_captions = "captions.srt"
-        else:
-            captions_key = f"{owner}/exports/{ex['id']}.{kind}"
-            await upload_bytes(text.encode(), captions_key, "application/x-subrip" if kind == "srt" else "text/vtt", workdir)
+        captions_key = f"{owner}/exports/{ex['id']}.{kind}"
+        await upload_bytes(text.encode(), captions_key, "application/x-subrip" if kind == "srt" else "text/vtt", workdir)
 
     out = f"export.{ex['format']}"
     await run_ffmpeg(export.build_args(plan, out), workdir, plan.duration,

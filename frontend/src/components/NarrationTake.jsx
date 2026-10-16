@@ -5,6 +5,7 @@ import * as editor from "../lib/editorApi.js";
 import { uploadToStorage } from "../lib/libraryStore.js";
 import { api } from "../lib/api.js";
 import { clock } from "../lib/format.js";
+import AudioPlayer from "./AudioPlayer.jsx";
 
 const MIN_TAKE_S = 2;
 
@@ -92,7 +93,7 @@ export default function NarrationTake({ project }) {
         )}
         {state === "review" && take && (
           <>
-            <audio src={take.url} controls />
+            <AudioPlayer src={take.url} label="Your take" onError={setErr} />
             <button className="btn" onClick={() => { URL.revokeObjectURL(take.url); setTake(null); setState("idle"); }}>Record again</button>
             <button className="btn btn-primary" onClick={submit}>Use this take</button>
           </>

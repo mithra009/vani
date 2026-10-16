@@ -98,8 +98,9 @@ def test_voice_lands_at_its_timeline_position(media, tmp_path):
 
 def test_burned_captions_render(media, tmp_path):
     plan, _, caps = make_plan(media, "mp4")
-    (tmp_path / "captions.srt").write_text(export.captions_file(caps, "srt"), encoding="utf-8")
-    plan.burn_captions = "captions.srt"
+    caps[0]["text"] = r"ನಾನು ಇವತ್ತು ಸ್ಟಾಕ್ {\b1}"           # Indic conjuncts + an attempted override tag
+    (tmp_path / "captions.ass").write_text(export.captions_ass(caps, export.output_height(plan)), encoding="utf-8")
+    plan.burn_captions = "captions.ass"
     subprocess.run(["ffmpeg", *export.build_args(plan, "out.mp4")], cwd=tmp_path, check=True, capture_output=True)
     assert abs(float(probe(tmp_path / "out.mp4")["format"]["duration"]) - 5.0) <= FRAME + 0.03
 
@@ -115,3 +116,10 @@ def test_captions_files():
     caps = [{"start": 61.5, "end": 62.25, "text": "Hi"}]
     assert export.captions_file(caps, "srt") == "1\n00:01:01,500 --> 00:01:02,250\nHi\n"
     assert export.captions_file(caps, "vtt").startswith("WEBVTT\n\n00:01:01.500 --> 00:01:02.250\nHi")
+
+
+def test_captions_ass_is_sized_to_the_output_and_strips_override_tags():
+    ass = export.captions_ass([{"start": 1.5, "end": 3.25, "text": r"Hi {\b1}there"}], 720)
+    assert "PlayResY: 720" in ass and "PlayResX: 1280" in ass
+    assert "Style: Default,Noto Sans,40," in ass
+    assert r"Dialogue: 0,0:00:01.50,0:00:03.25,Default,,0,0,0,,Hi (\b1)there" in ass

@@ -14,7 +14,19 @@ const FORMATS = [
 const HEIGHTS = [480, 720, 1080];
 const POLL_MS = 2000;
 
-export default function ExportPanel({ project }) {
+const WARNING_TEXT = {
+  overlap: "overlaps another voice clip (both play, mixed)",
+  past_end: "runs past the end of the video and is cut off",
+  before_start: "starts before 0:00 and its start is cut off",
+  on_cut: "speech runs into a cut in the video",
+  video_cut: "isn't in the export: its part of the video was cut",
+  no_audio: "isn't in the export: it has no audio",
+  unplaced: "isn't in the export: it isn't placed on the timeline",
+};
+
+export default function ExportPanel({ project, chunks = [] }) {
+  const [openWarn, setOpenWarn] = useState(null);     // export id whose warnings are expanded
+  const chunkNo = Object.fromEntries(chunks.map((c) => [String(c.id), c.idx + 1]));
   const [format, setFormat] = useState("mp4");
   const [height, setHeight] = useState(720);
   const [audioMix, setAudioMix] = useState("full");
@@ -106,10 +118,12 @@ export default function ExportPanel({ project }) {
 
       <div className="export-list">
         {list.length === 0 && <p className="dim body-sm">No exports yet.</p>}
-        {list.map((e) => (
+        {list.map((e, i) => (
           <div key={e.id} className={`export-row export-${e.status}`}>
+            {/* The list is newest first, so the oldest export is #1. */}
+            <span className="export-n">#{list.length - i}</span>
             <span className="mono">{e.format.toUpperCase()}{e.height ? ` ${e.height}p` : ""}</span>
-            <span className="body-sm dim">v{e.timeline_version} · {ago(Date.parse(e.created_at))}</span>
+            <span className="body-sm dim">{ago(Date.parse(e.created_at))}</span>
             {(e.status === "queued" || e.status === "rendering") && (
               <span className="export-progress"><span style={{ width: `${Math.round(e.progress * 100)}%` }} /></span>
             )}
@@ -121,9 +135,21 @@ export default function ExportPanel({ project }) {
             )}
             {e.status === "failed" && <span className="caption" style={{ color: "var(--red)" }}>{e.error_message}</span>}
             {e.warnings?.length > 0 && (
-              <span className="caption tl-warn" title={e.warnings.map((w) => w.flags.join(", ")).join("\n")}>
+              <button className="export-warn-btn" aria-expanded={openWarn === e.id}
+                      onClick={() => setOpenWarn((x) => (x === e.id ? null : e.id))}>
                 ⚠ {e.warnings.length} warning{e.warnings.length > 1 ? "s" : ""}
-              </span>
+                <span className="export-warn-caret" aria-hidden="true">{openWarn === e.id ? "▴" : "▾"}</span>
+              </button>
+            )}
+            {openWarn === e.id && (
+              <ul className="export-warn-list">
+                {e.warnings.flatMap((w) => w.flags.map((f) => (
+                  <li key={`${w.chunk_id}-${f}`}>
+                    <b>{chunkNo[w.chunk_id] ? `Chunk ${chunkNo[w.chunk_id]}` : "A removed chunk"}</b> {WARNING_TEXT[f] || f}.
+                  </li>
+                )))}
+                <li className="export-warn-hint">Fix these on the Timeline tab, then export again. Warnings don't stop an export.</li>
+              </ul>
             )}
           </div>
         ))}

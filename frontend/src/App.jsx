@@ -1,17 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { initApi } from "./lib/api.js";
+import { Toaster } from "./lib/toast.jsx";
 import { AuthProvider, useAuth } from "./lib/auth.jsx";
 import { Logo } from "./components/Icons.jsx";
-import Landing from "./pages/Landing.jsx";
-import NewProject from "./pages/NewProject.jsx";
-import Library from "./pages/Library.jsx";
-import Projects from "./pages/Projects.jsx";
-import Job from "./pages/Job.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
-import EditorProject from "./pages/Editor.jsx";
-import NewEditorProject from "./pages/NewEditorProject.jsx";
+
+// Every other page loads on demand, so /signin downloads only what it renders.
+const Landing = lazy(() => import("./pages/Landing.jsx"));
+const NewProject = lazy(() => import("./pages/NewProject.jsx"));
+const Library = lazy(() => import("./pages/Library.jsx"));
+const Projects = lazy(() => import("./pages/Projects.jsx"));
+const Job = lazy(() => import("./pages/Job.jsx"));
+const EditorProject = lazy(() => import("./pages/Editor.jsx"));
+const NewEditorProject = lazy(() => import("./pages/NewEditorProject.jsx"));
+const PageLoading = () => <div className="progress-wrap"><div className="spinner" style={{ margin: "0 auto" }} /></div>;
 
 export default function App() {
   const [mode, setMode] = useState(null);
@@ -58,6 +62,7 @@ function Shell({ mode }) {
         {!ready ? (
           <div className="progress-wrap"><div className="spinner" style={{ margin: "0 auto" }} /></div>
         ) : (
+          <Suspense fallback={<PageLoading />}>
           <Routes>
             <Route path="/signin" element={signedIn && gated ? <Navigate to="/" replace /> : <AuthPage />} />
             <Route path="/signup" element={signedIn && gated ? <Navigate to="/" replace /> : <AuthPage />} />
@@ -73,8 +78,11 @@ function Shell({ mode }) {
             <Route path="/jobs/:id" element={<Protected ok={signedIn}><Job mode={mode} /></Protected>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         )}
       </main>
+
+      <Toaster />
 
       <footer className="footer">
         <div className="footer-inner">

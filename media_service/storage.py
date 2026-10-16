@@ -8,6 +8,7 @@ URL is normalized to an absolute one here.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from functools import lru_cache
 from typing import Any
@@ -53,12 +54,40 @@ def create_signed_upload_url(key: str) -> dict:
     return {"url": _absolute(str(url)), "token": str(token)}
 
 
+# Signed URLs are reused until 80% of their lifetime has passed. A fresh token on every
+# request makes each URL unique, so the browser re-downloads thumbnails/audio it already
+# has; a stable URL lets the HTTP cache serve them. Per process, bounded, thread-safe.
+_URL_REUSE_FRACTION = 0.8
+_URL_CACHE_MAX = 5000
+_url_cache: dict[tuple[str, int], tuple[str, float]] = {}
+_url_lock = threading.Lock()
+
+
 def create_signed_download_url(key: str, ttl: int = SIGNED_URL_TTL_SECONDS) -> str:
+    now = time.monotonic()
+    with _url_lock:
+        hit = _url_cache.get((key, ttl))
+        if hit and hit[1] > now:
+            return hit[0]
     res = admin().storage.from_(MEDIA_BUCKET).create_signed_url(key, ttl)
     url = _field(res, "signedURL", "signed_url", "signedUrl", "signed_url_with_token")
     if not url:
         raise RuntimeError(f"Unexpected signed-url response: {res!r}")
-    return _absolute(str(url))
+    url = _absolute(str(url))
+    with _url_lock:
+        if len(_url_cache) >= _URL_CACHE_MAX:
+            for k in [k for k, (_, exp) in _url_cache.items() if exp <= now] or list(_url_cache)[: _URL_CACHE_MAX // 10]:
+                _url_cache.pop(k, None)
+        _url_cache[(key, ttl)] = (url, now + ttl * _URL_REUSE_FRACTION)
+    return url
+
+
+def forget_signed_urls(keys: list[str]) -> None:
+    """Drop cached URLs for objects that were deleted or overwritten."""
+    gone = set(keys)
+    with _url_lock:
+        for k in [k for k in _url_cache if k[0] in gone]:
+            _url_cache.pop(k, None)
 
 
 def object_info(key: str) -> dict | None:
@@ -90,6 +119,7 @@ def upload_file(local_path: str, key: str, content_type: str) -> None:
     admin().storage.from_(MEDIA_BUCKET).upload(
         key, data, {"content-type": content_type, "upsert": "true"}
     )
+    forget_signed_urls([key])
 
 
 def _read_with_retry(local_path: str, tries: int = 5, delay: float = 0.25) -> bytes:
@@ -112,3 +142,4 @@ def download(key: str) -> bytes:
 def remove(keys: list[str]) -> None:
     if keys:
         admin().storage.from_(MEDIA_BUCKET).remove(keys)
+        forget_signed_urls(keys)
