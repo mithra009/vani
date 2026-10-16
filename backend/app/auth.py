@@ -102,6 +102,11 @@ class SignIn(BaseModel):
     password: str
 
 
+class ProfileSetup(BaseModel):
+    first_name: str | None = None
+    last_name: str | None = None
+
+
 def _session(res) -> dict:
     s = res.session
     return {"access_token": s.access_token, "refresh_token": s.refresh_token, "expires_at": s.expires_at}
@@ -111,6 +116,20 @@ def _profile(user_id: str) -> dict | None:
     r = supa.admin().table("users").select("id, username, first_name, last_name, email, created_at") \
         .eq("id", user_id).limit(1).execute()
     return r.data[0] if r.data else None
+
+
+def _generated_username(email: str, user_id: str, attempt: int = 0) -> str:
+    local_part = email.split("@", 1)[0].lower()
+    stem = re.sub(r"[^a-z0-9_-]+", "_", local_part).strip("_-") or "user"
+    if len(stem) < 3:
+        stem = "user"
+    suffix = user_id.replace("-", "").lower()[:8] + (f"_{attempt}" if attempt else "")
+    stem = stem[:30 - len(suffix) - 1].rstrip("_-") or "user"
+    return f"{stem}_{suffix}"
+
+
+def _display_name(value: str | None, fallback: str) -> str:
+    return " ".join((value or "").split())[:60].strip() or fallback
 
 
 @router.get("/username-available")
@@ -156,6 +175,46 @@ def signup(body: SignUp):
         raise HTTPException(409, "That username or email was just taken. Try another.")
     res = supa.public_client().auth.sign_in_with_password({"email": email, "password": body.password})
     return {"session": _session(res), "user": _profile(uid)}
+
+
+@router.post("/profile")
+def ensure_profile(body: ProfileSetup, user: User):
+    profile = _profile(user["id"])
+    if profile:
+        return profile
+
+    email = (user.get("email") or "").strip().lower()
+    if "@" not in email:
+        raise HTTPException(400, "Your Supabase account doesn't include an email address.")
+
+    email_name = email.split("@", 1)[0]
+    parts = [part for part in re.split(r"[._-]+", email_name) if part]
+    first_name = _display_name(body.first_name, parts[0].capitalize() if parts else "Google")
+    last_name = _display_name(body.last_name, " ".join(p.capitalize() for p in parts[1:]) or "User")
+    db = supa.admin()
+
+    for attempt in range(100):
+        username = _generated_username(email, user["id"], attempt)
+        if db.table("users").select("id").eq("username", username).limit(1).execute().data:
+            continue
+        try:
+            db.table("users").insert({
+                "id": user["id"], "username": username, "first_name": first_name,
+                "last_name": last_name, "email": email,
+            }).execute()
+        except Exception as e:
+            profile = _profile(user["id"])
+            if profile:
+                return profile
+            log.error("profile setup failed for user %s: %s", user["id"], e)
+            raise HTTPException(409, "Couldn't finish creating your profile. Try signing in again.")
+        profile = _profile(user["id"])
+        if not profile:
+            log.error("profile insert returned no row for user %s", user["id"])
+            raise HTTPException(502, "Couldn't load your new profile. Try signing in again.")
+        return profile
+
+    raise HTTPException(409, "Couldn't generate an available username. Contact support.")
 
 
 @router.post("/signin")

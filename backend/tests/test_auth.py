@@ -53,3 +53,59 @@ def test_signup_validation():
     with pytest.raises(ValidationError):
         auth.SignUp(**{**base, "first_name": "   "})
     assert auth.SignUp(**{**base, "username": "  MiThRa  "}).username == "mithra"
+
+
+def test_generated_username_is_valid_and_unique_per_user():
+    user_id = "01234567-89ab-cdef-0123-456789abcdef"
+    username = auth._generated_username("a.user+test@example.com", user_id)
+    assert auth.USERNAME_RE.fullmatch(username)
+    assert username.startswith("a_user_test_")
+    assert auth._generated_username("a.user+test@example.com", user_id, 1) != username
+
+
+def test_google_profile_is_created_from_authenticated_user(client, monkeypatch):
+    monkeypatch.setattr(auth, "AUTH_DISABLED", False)
+    monkeypatch.setattr(auth, "verify", lambda token: {
+        "id": "01234567-89ab-cdef-0123-456789abcdef", "email": "google.user@example.com",
+    })
+    profiles = {}
+
+    class Query:
+        def __init__(self, table):
+            self.table = table
+            self.filters = {}
+
+        def select(self, _columns):
+            return self
+
+        def eq(self, key, value):
+            self.filters[key] = value
+            return self
+
+        def limit(self, _count):
+            return self
+
+        def execute(self):
+            rows = [row for row in profiles.values()
+                    if all(row.get(key) == value for key, value in self.filters.items())]
+            return type("Result", (), {"data": rows})()
+
+        def insert(self, row):
+            profiles[row["id"]] = row
+            return self
+
+    class Database:
+        def table(self, _name):
+            return Query("users")
+
+    monkeypatch.setattr(auth.supa, "admin", lambda: Database())
+
+    response = client.post(
+        "/api/auth/profile",
+        headers={"Authorization": "Bearer valid"},
+        json={"first_name": "Google", "last_name": "User"},
+    )
+    assert response.status_code == 200
+    assert response.json()["email"] == "google.user@example.com"
+    assert response.json()["first_name"] == "Google"
+    assert auth.USERNAME_RE.fullmatch(response.json()["username"])

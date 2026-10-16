@@ -8,14 +8,25 @@ const AuthCtx = createContext(null);
 export function AuthProvider({ children }) {
   const [status, setStatus] = useState("loading");
   const [profile, setProfile] = useState(null);
+  const [authError, setAuthError] = useState(null);
 
   const loadProfile = useCallback(async () => {
     try {
+      const { data } = await supabase.auth.getSession();
+      const metadata = data.session?.user?.user_metadata || {};
+      const fullName = [metadata.full_name, metadata.name].find((name) => typeof name === "string")?.trim() || "";
+      const nameParts = fullName ? fullName.split(/\s+/) : [];
+      await authApi.ensureProfile({
+        first_name: metadata.first_name || metadata.given_name || nameParts[0] || "",
+        last_name: metadata.last_name || metadata.family_name || nameParts.slice(1).join(" "),
+      });
       setProfile(await authApi.me());
+      setAuthError(null);
       setStatus("signed_in");
-    } catch {
+    } catch (err) {
       await supabase?.auth.signOut();
       setProfile(null);
+      setAuthError(err.message || "Couldn't finish signing in. Please try again.");
       setStatus("signed_out");
     }
   }, []);
@@ -34,16 +45,30 @@ export function AuthProvider({ children }) {
   const adopt = async ({ session, user }) => {
     await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
     setProfile(user);
+    setAuthError(null);
     setStatus("signed_in");
   };
 
   const value = {
     status,
     profile,
+    authError,
     configured: !!supabase,
     signUp: async (form) => adopt(await authApi.signUp(form)),
     signIn: async (identifier, password) => adopt(await authApi.signIn(identifier, password)),
-    signOut: async () => { await supabase?.auth.signOut(); setProfile(null); setStatus("signed_out"); },
+    signInWithGoogle: async (redirectTo) => {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo },
+      });
+      if (error) throw error;
+    },
+    signOut: async () => {
+      await supabase?.auth.signOut();
+      setProfile(null);
+      setAuthError(null);
+      setStatus("signed_out");
+    },
   };
 
   useEffect(() => { setUnauthorizedHandler(() => value.signOut()); });

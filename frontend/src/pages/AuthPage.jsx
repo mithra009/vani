@@ -20,7 +20,7 @@ function Field({ id, label, error, hint, children }) {
 }
 
 export default function AuthPage() {
-  const { signIn, signUp, configured } = useAuth();
+  const { signIn, signUp, signInWithGoogle, authError, configured } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const [tab, setTab] = useState(loc.pathname === "/signup" ? "signup" : "signin");
@@ -87,6 +87,17 @@ export default function AuthPage() {
     }
   }
 
+  async function googleSignIn() {
+    setBusy(true);
+    setError(null);
+    try {
+      await signInWithGoogle(`${window.location.origin}/signin`);
+    } catch (err) {
+      setError(err.message || "Couldn't start Google sign-in. Try again.");
+      setBusy(false);
+    }
+  }
+
   const pwInput = (autoComplete) => (
     <div className="pw-wrap">
       <input id="password" className="input" type={showPw ? "text" : "password"} value={f.password}
@@ -116,6 +127,12 @@ export default function AuthPage() {
             <span>Sign-in isn't configured. Add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to .env and restart the frontend.</span>
           </div>
         )}
+
+        <button type="button" className="btn btn-secondary auth-google" onClick={googleSignIn}
+                disabled={busy || !configured}>
+          Continue with Google
+        </button>
+        <div className="auth-divider" aria-hidden="true"><span>or continue with email</span></div>
 
         <form onSubmit={submit} noValidate>
           <AnimatePresence mode="wait" initial={false}>
@@ -166,7 +183,11 @@ export default function AuthPage() {
             </motion.div>
           </AnimatePresence>
 
-          {error && <div className="banner error" role="alert" style={{ marginTop: 18 }}><span className="banner-dot" /><span>{error}</span></div>}
+          {(error || authError) && (
+            <div className="banner error" role="alert" style={{ marginTop: 18 }}>
+              <span className="banner-dot" /><span>{error || authError}</span>
+            </div>
+          )}
 
           <button type="submit" className="btn btn-primary auth-submit" disabled={busy || !configured}>
             {busy ? (tab === "signup" ? "Creating account…" : "Signing in…") : tab === "signup" ? "Create account" : "Sign in"}

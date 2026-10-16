@@ -693,6 +693,9 @@ input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit
 .auth-sub { text-align: center; color: var(--text-2); margin-top: 4px; font-size: 15px; }
 .auth-tabs { display: flex; margin: 18px 0 14px; }
 .auth-tabs button { flex: 1; }
+.auth-google { width: 100%; margin-top: 14px; }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 14px 0; color: var(--text-3); font-size: 13px; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: var(--hairline); }
 .auth-fields { display: grid; gap: 10px; }
 .auth-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .auth-field { display: grid; gap: 4px; min-width: 0; }

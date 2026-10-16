@@ -46,6 +46,9 @@ export const authApi = {
   signIn: (identifier, password) => http("/auth/signin", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier, password }),
   }),
+  ensureProfile: (profile) => http("/auth/profile", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profile),
+  }),
   usernameAvailable: (u) => http(`/auth/username-available?username=${encodeURIComponent(u)}`),
   me: () => http("/me"),
 };

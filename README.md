@@ -70,7 +70,11 @@ six app processes: `backend` (:8010), `media-api` (:8020) + `media-worker`,
    docker compose up --build
    ```
    Open http://localhost:8080. If Supabase Auth restricts redirect URLs, add
-   `http://localhost:8080` there.
+   `http://localhost:8080` there. For Google sign-in, also allow
+   `http://localhost:8080/signin` in Supabase Auth's redirect URL list. Add your
+   production sign-in URL there before deploying. Google sign-in uses the Google
+   provider configured in Supabase; the existing username/email and password flow
+   remains available.
 
 **Credits:** every service runs with fake providers by default (`FAKE_PROVIDERS=1`): no Gnani or
 Gemini calls, no credits. For a real run:
