@@ -7,7 +7,15 @@
 // - Unsaved ops survive a reload via localStorage. Undo history is session-only (C9-proposal).
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as editor from "./editorApi.js";
-import { apply, OpError } from "./timeline.js";
+import { apply, newId, OpError } from "./timeline.js";
+
+/** Ops that create something must carry the new id. Otherwise the server invents a different
+ *  one and every later op on that clip is rejected ("No video clip ..."). */
+function withIds(op) {
+  if (op.type === "video.split" && !op.new_id) return { ...op, new_id: newId("vc") };
+  if (op.type === "music.add" && op.clip && !op.clip.id) return { ...op, clip: { ...op.clip, id: newId("mc") } };
+  return op;
+}
 
 const SAVE_DELAY_MS = 1000;
 const RETRY_MS = 4000;
@@ -127,7 +135,8 @@ export function useTimeline(projectId, ctx) {
   }, [flush]);
 
   /** Apply ops locally. Throws OpError (the caller shows it) — nothing is half-applied. */
-  const run = useCallback((ops, { record = true } = {}) => {
+  const run = useCallback((rawOps, { record = true } = {}) => {
+    const ops = rawOps.map(withIds);
     let doc = state.doc;
     const invs = [];
     for (const op of ops) { let inv; [doc, inv] = apply(doc, op, ctxRef.current); invs.push(inv); }

@@ -9,7 +9,8 @@ const dbToGain = (db) => Math.pow(10, db / 20);
 
 export class PreviewEngine {
   /** loaders: { chunkUrl(chunk) → Promise<url>, mediaUrl(mediaId) → Promise<url> } */
-  constructor(video, loaders, onTime, onError) {
+  constructor(video, loaders, onTime, onError, onState) {
+    this.onState = onState;          // (playing) => void: the single source of truth for the button
     this.video = video;
     this.loaders = loaders;
     this.onTime = onTime;
@@ -75,6 +76,7 @@ export class PreviewEngine {
     this.startAt = now - fromT;
     this.doc = doc;
     this.playing = true;
+    this.onState?.(true);
     this.master.gain.value = 1;
 
     const { placed } = layout(doc, chunks);
@@ -163,6 +165,7 @@ export class PreviewEngine {
     this.sources = [];
     if (this.origGain) { this.origGain.gain.cancelScheduledValues(0); }
     this.video?.pause();
+    if (this.playing) this.onState?.(false);
     this.playing = false;
   }
 

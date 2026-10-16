@@ -5,21 +5,61 @@
 import { useSyncExternalStore } from "react";
 import { api } from "./api.js";
 import { accessToken } from "./supabase.js";
-import { LIBRARY } from "./library.js";
 
 const MAX_BYTES = 500e6;
 const MAX_SECONDS = 600;
 const POLL_MS = 2500;
 const POLL_MAX_TRIES = 480; // ~20 min of processing updates
 
+// Stale-while-revalidate cache of the asset list, per signed-in user, in localStorage:
+// a refresh paints the last known list at once, then revalidates in the background.
+// Entries older than CACHE_TTL_MS are ignored (thumbnail URLs are signed for 1 h and the
+// server reuses them for ~48 min, so 10 min keeps every cached URL valid). Refetches are
+// throttled to one per REVALIDATE_MS; uploads, deletes and status polls update the cache.
+const CACHE_TTL_MS = 10 * 60_000;
+const REVALIDATE_MS = 30_000;
+const CACHE_VERSION = 1;
+
+function cacheKey() {
+  const t = accessToken();
+  if (!t) return null;
+  try {
+    const sub = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub;
+    return sub ? `vani.library.v${CACHE_VERSION}.${sub}` : null;
+  } catch { return null; }
+}
+function readCache() {
+  const k = cacheKey();
+  if (!k) return null;
+  try {
+    const c = JSON.parse(localStorage.getItem(k) || "null");
+    return c && Date.now() - c.at < CACHE_TTL_MS && Array.isArray(c.items) ? c : null;
+  } catch { return null; }
+}
+function writeCache() {
+  const k = cacheKey();
+  if (!k) return;
+  try { localStorage.setItem(k, JSON.stringify({ at: Date.now(), items: serverAssets })); }
+  catch { /* storage full or blocked: the list still works, just without the instant paint */ }
+}
+
 let serverAssets = [];   // cloud-backed items from the media API
 let sessionItems = [];   // session-only fallbacks (File kept in memory)
-let snapshot = [...sessionItems, ...LIBRARY];
+let snapshot = [...sessionItems];
+let lastFetch = 0;
+let inflight = null;
 const listeners = new Set();
 
-function publish() {
-  snapshot = [...serverAssets, ...sessionItems, ...LIBRARY];
+function publish({ persist = true } = {}) {
+  snapshot = [...serverAssets, ...sessionItems];
+  if (persist) writeCache();
   listeners.forEach((l) => l());
+}
+
+// Paint from cache as soon as this module loads (the token is restored before pages mount).
+{
+  const c = readCache();
+  if (c) { serverAssets = c.items; snapshot = [...serverAssets]; }
 }
 
 function probe(url) {
@@ -54,19 +94,31 @@ export function fromAsset(a) {
 }
 
 /** Re-fetch the owner's assets (call on Library mount so the list survives refresh). */
-export async function refreshLibrary() {
-  try {
-    const list = await api.listAssets();
-    serverAssets = (list || []).map(fromAsset);
-    publish();
-    // Resume status polling for anything still processing before the reload.
-    for (const a of serverAssets) {
-      if (a.status !== "READY" && a.status !== "FAILED") pollAsset(a.id);
-    }
-    return true;
-  } catch {
-    return false;
+export async function refreshLibrary({ force = false } = {}) {
+  if (!serverAssets.length) {               // first call this session: try the cache
+    const c = readCache();
+    if (c) { serverAssets = c.items; publish({ persist: false }); }
   }
+  if (!force && Date.now() - lastFetch < REVALIDATE_MS) return true;
+  if (inflight) return inflight;              // one request at a time, shared by callers
+  inflight = (async () => {
+    try {
+      const list = await api.listAssets();
+      serverAssets = (list || []).map(fromAsset);
+      lastFetch = Date.now();
+      publish();
+      // Resume status polling for anything still processing before the reload.
+      for (const a of serverAssets) {
+        if (a.status !== "READY" && a.status !== "FAILED") pollAsset(a.id);
+      }
+      return true;
+    } catch {
+      return serverAssets.length > 0;         // cached list still shown; caller treats as reachable
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
 }
 
 /** PUT the file to the signed Supabase upload URL (XHR for progress).
@@ -196,7 +248,16 @@ export async function removeVideo(id) {
   if (remote) {
     serverAssets = serverAssets.filter((u) => u.id !== id);
     publish();
-    try { await api.deleteAsset(id); } catch { /* already gone or backend down */ }
+    try {
+      await api.deleteAsset(id);
+    } catch (e) {
+      // Put it back so the user sees it wasn't removed (a 404 means it's already gone: fine).
+      if (!/doesn't exist|404/.test(e.message)) {
+        serverAssets = [remote, ...serverAssets];
+        publish();
+        throw e;
+      }
+    }
     return;
   }
   const item = sessionItems.find((u) => u.id === id);

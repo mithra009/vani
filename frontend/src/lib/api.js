@@ -1,6 +1,5 @@
 // API client for the backend contract in PLAN.md §6. Falls back to the in-browser demo
 // (mock.js) when the backend isn't reachable, so the UI is usable before FastAPI exists.
-import { mock } from "./mock.js";
 import { accessToken, withToken } from "./supabase.js";
 
 let onUnauthorized = () => {};
@@ -17,7 +16,13 @@ async function http(path, opts = {}) {
   const t = accessToken();
   const headers = { ...(opts.headers || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) };
   const res = await fetch(`/api${path}`, { ...opts, headers });
-  const body = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
+  // 204 / empty bodies are valid successes even when labelled JSON; never parse them.
+  const text = res.status === 204 ? "" : await res.text();
+  let body = null;
+  if (text && res.headers.get("content-type")?.includes("json")) {
+    try { body = JSON.parse(text); }
+    catch { if (res.ok) throw new Error(`The server sent an unreadable response (${res.status}).`); }
+  }
   if (res.status === 401 && !path.startsWith("/auth/")) onUnauthorized();
   if (!res.ok) throw new Error(detail(body, res.status));
   return body;
@@ -141,7 +146,7 @@ export async function initApi() {
     impl = real;
     mode = "live";
   } catch {
-    impl = mock;
+    impl = (await import("./mock.js")).mock;   // demo-only code, loaded only when needed
     mode = "demo";
   }
   return mode;

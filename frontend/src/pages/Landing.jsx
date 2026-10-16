@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { langName } from "../lib/catalog.js";
-import { LIBRARY } from "../lib/library.js";
+import { refreshLibrary, useLibrary } from "../lib/libraryStore.js";
 import { ago } from "../lib/format.js";
 import SyncTimeline from "../components/SyncTimeline.jsx";
 import { Arrow } from "../components/Icons.jsx";
@@ -61,6 +61,8 @@ const TEAM = [
 ];
 
 export default function Landing({ mode }) {
+  const library = useLibrary();
+  useEffect(() => { refreshLibrary(); }, []);
   const { profile } = useAuth() || {};
   const [projects, setProjects] = useState(null);
 
@@ -127,10 +129,10 @@ export default function Landing({ mode }) {
             <Link to="/library" className="ws-card ws-library">
               <div className="ws-top">
                 <span className="ws-kicker">Library</span>
-                <span className="ws-count">{LIBRARY.length}</span>
+                <span className="ws-count">{library.length}</span>
               </div>
               <div className="ws-thumbs" aria-hidden="true">
-                {LIBRARY.slice(0, 4).map((v) => <span key={v.id} style={{ background: v.cover }} />)}
+                {library.slice(0, 4).map((v) => <span key={v.id} style={{ background: v.cover || "var(--surface-3)" }} />)}
               </div>
               <span className="ws-go">Open library <Arrow /></span>
             </Link>

@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from . import jobs, media, pipeline, providers, store
 from .auth import User, me_router, router as auth_router
@@ -150,6 +150,32 @@ async def create_job(user: User, video: UploadFile = File(...), src_lang: str = 
 @app.get("/api/jobs/{job_id}")
 def read_job(job_id: str, user: User):
     return jobs.public(get_job(job_id, user))
+
+
+BUSY = {"transcribing", "dubbing"}
+
+
+@app.patch("/api/jobs/{job_id}")
+async def rename_job(job_id: str, user: User, request: Request):
+    body = await request.json()
+    name = str(body.get("name") or "").strip() if isinstance(body, dict) else ""
+    if not 1 <= len(name) <= 120:
+        raise HTTPException(422, "The name must be 1–120 characters.")
+    job = get_job(job_id, user)
+    return jobs.public(jobs.update(job, name=name))
+
+
+@app.delete("/api/jobs/{job_id}", status_code=204)
+def delete_job(job_id: str, user: User):
+    job = get_job(job_id, user)
+    if job.get("status") in BUSY:
+        raise HTTPException(409, "This project is still processing. Wait for it to finish, then delete it.")
+    try:
+        store.delete_job(job_id)
+    except Exception as e:
+        log.exception("delete failed for %s", job_id)
+        raise HTTPException(502, f"Couldn't delete the project: {type(e).__name__}.")
+    return Response(status_code=204)
 
 
 @app.post("/api/jobs/{job_id}/narration")

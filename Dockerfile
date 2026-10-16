@@ -15,6 +15,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
 COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 
+# Fonts for burned-in captions. The slim base has none, so libass drew a box for every
+# Indic character. fonts-noto-core covers Devanagari, Kannada, Tamil, Telugu, Malayalam,
+# Bengali, Gujarati and Gurmukhi; fontconfig lets ffmpeg find them.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends fontconfig fonts-noto-core \
+ && fc-cache -f \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY backend/requirements.txt backend/requirements.txt

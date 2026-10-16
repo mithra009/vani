@@ -47,7 +47,7 @@ export default function TimelineEditor({ project, chunks }) {
     engine.current = new PreviewEngine(videoRef.current, {
       chunkUrl: (c) => editor.chunkAudioUrl(project.id, c.id).then((r) => r.url),
       mediaUrl: (id) => editor.mediaUrl(project.id, id).then((r) => r.url),
-    }, setT, setErr);
+    }, setT, setErr, setPlaying);
     return () => engine.current?.dispose();
   }, [project.id, proxyUrl, tl.status]);
 
@@ -72,8 +72,7 @@ export default function TimelineEditor({ project, chunks }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // The engine stops itself at the end of the timeline; reflect that in the button.
-  useEffect(() => { if (playing && engine.current && !engine.current.playing) setPlaying(false); }, [t, playing]);
+  const [loadingPlay, setLoadingPlay] = useState(false);
 
   // A just-uploaded music file is placed once it is part of the validation context.
   const [pendingMusic, setPendingMusic] = useState(null);
@@ -96,18 +95,22 @@ export default function TimelineEditor({ project, chunks }) {
   const caption = doc.captions.enabled ? placed.find((p) => !p.muted && t >= p.t && t < p.t + p.length) : null;
 
   async function togglePlay() {
-    if (!engine.current) return;
-    if (playing) { engine.current.stop(); setPlaying(false); return; }
+    if (!engine.current || loadingPlay) return;
+    if (playing) { engine.current.stop(); return; }
     setErr(null);
-    setPlaying(true);
+    setLoadingPlay(true);
     try { await engine.current.play(doc, chunks, t); }
-    catch (e) { setErr(`Preview failed: ${e.message}`); setPlaying(false); }
+    catch (e) { setErr(`Preview failed: ${e.message}`); engine.current.stop(); }
+    finally { setLoadingPlay(false); }
   }
 
-  function seek(x) {
-    engine.current?.stop(); setPlaying(false);
-    engine.current?.seek(doc, x);
-    setT(Math.max(0, Math.min(x, end)));
+  /** Move the playhead; if it was playing, keep playing from the new spot. */
+  function seek(x, { resume = false } = {}) {
+    const to = Math.max(0, Math.min(x, end));
+    engine.current?.stop();
+    engine.current?.seek(doc, to);
+    setT(to);
+    if (resume) engine.current?.play(doc, chunks, to).catch((e) => setErr(`Preview failed: ${e.message}`));
   }
 
   function splitVideoAtPlayhead() {
@@ -131,10 +134,14 @@ export default function TimelineEditor({ project, chunks }) {
       </div>
 
       <div className="tl-toolbar">
-        <button className="btn btn-primary btn-sm" onClick={togglePlay} disabled={!proxyUrl}>{playing ? "❚❚ Pause" : "▶ Play"}</button>
+        <button className="btn btn-primary btn-sm tl-play" onClick={togglePlay} disabled={!proxyUrl || loadingPlay}
+                aria-label={playing ? "Pause" : "Play"} title="Space">
+          {loadingPlay ? "Loading…" : playing ? "❚❚ Pause" : "▶ Play"}
+        </button>
         <span className="mono tl-time">{clock(t)} / {clock(end)}</span>
         <button className="btn btn-sm" onClick={tl.undo} disabled={!tl.canUndo} title="Ctrl+Z">↶ Undo</button>
         <button className="btn btn-sm" onClick={tl.redo} disabled={!tl.canRedo} title="Ctrl+Shift+Z">↷ Redo</button>
+        <SaveState save={tl.save} />
         <button className="btn btn-sm" onClick={splitVideoAtPlayhead}>✂ Split video</button>
         <label className="tl-check"><input type="checkbox" checked={doc.captions.enabled}
           onChange={(e) => tl.run([{ type: "track.set", track: "captions", fields: { enabled: e.target.checked } }])} /> Captions</label>
@@ -144,7 +151,6 @@ export default function TimelineEditor({ project, chunks }) {
         }} setErr={setErr} />
         <span style={{ flex: 1 }} />
         <label className="body-sm">Zoom <input type="range" min={10} max={160} value={zoom} onChange={(e) => setZoom(+e.target.value)} /></label>
-        <SaveState save={tl.save} />
       </div>
 
       {err && <div className="banner error" role="alert"><span className="banner-dot" /><span>{err}</span>
@@ -156,12 +162,12 @@ export default function TimelineEditor({ project, chunks }) {
 
       <div className="tl-scroll">
         <div className="tl-tracks" style={{ width }}>
-          <Ruler end={end} zoom={zoom} onSeek={seek} />
-          <div className="tl-playhead" style={{ left: t * zoom }} />
+          <Ruler end={end} zoom={zoom} onSeek={seek} playing={playing} />
+          <Playhead t={t} zoom={zoom} onSeek={seek} playing={playing} />
 
           <TrackRow label="Video">
             {vl.map((c, i) => (
-              <VideoClip key={c.id} c={c} i={i} n={vl.length} zoom={zoom} selected={sel?.id === c.id}
+              <VideoClip key={c.id} c={c} i={i} n={vl.length} next={vl[i + 1]} zoom={zoom} selected={sel?.id === c.id}
                          onSelect={() => setSel({ kind: "video", id: c.id })} tl={tl} sourceS={ctx.sourceS} />
             ))}
           </TrackRow>
@@ -217,8 +223,37 @@ export default function TimelineEditor({ project, chunks }) {
 const round3 = (x) => Math.round(x * 1000) / 1000;
 
 function SaveState({ save }) {
-  const label = { saved: "Saved", saving: "Saving…", retrying: "Not saved — retrying", error: "Not saved" }[save.state];
-  return <span className={`tl-save tl-save-${save.state}`} title={save.message || ""}>{label}{save.message && save.state === "error" ? `: ${save.message}` : ""}</span>;
+  const label = { saved: "✓ All changes saved", saving: "Syncing…", retrying: "Not saved, retrying…", error: "Not saved" }[save.state];
+  return (
+    <span className={`tl-save tl-save-${save.state}`} role="status" aria-live="polite" title={save.message || ""}>
+      {save.state === "saving" && <span className="tl-save-dot" />}{label}
+    </span>
+  );
+}
+
+/** Seek by dragging: pointer x inside the tracks area to seconds. Resumes playback on release if it was playing. */
+function useScrub(zoom, onSeek, playing) {
+  const wasPlaying = useRef(false);
+  const at = (e) => (e.clientX - e.currentTarget.closest(".tl-tracks").getBoundingClientRect().left - 80) / zoom;
+  return {
+    onPointerDown: (e) => {
+      e.preventDefault();
+      wasPlaying.current = playing;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      onSeek(at(e));
+    },
+    onPointerMove: (e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) onSeek(at(e)); },
+    onPointerUp: (e) => onSeek(at(e), { resume: wasPlaying.current }),
+  };
+}
+
+function Playhead({ t, zoom, onSeek, playing }) {
+  const scrub = useScrub(zoom, onSeek, playing);
+  return (
+    <div className="tl-playhead" style={{ left: t * zoom }}>
+      <span className="tl-playhead-grip" {...scrub} title="Drag to move the playhead" />
+    </div>
+  );
 }
 
 function TrackRow({ label, muted, children }) {
@@ -230,15 +265,13 @@ function TrackRow({ label, muted, children }) {
   );
 }
 
-function Ruler({ end, zoom, onSeek }) {
+function Ruler({ end, zoom, onSeek, playing }) {
+  const scrub = useScrub(zoom, onSeek, playing);
   const step = zoom >= 80 ? 1 : zoom >= 30 ? 5 : 10;
   const ticks = [];
   for (let s = 0; s <= end; s += step) ticks.push(s);
   return (
-    <div className="tl-ruler" onPointerDown={(e) => {
-      const r = e.currentTarget.getBoundingClientRect();
-      onSeek((e.clientX - r.left) / zoom);
-    }}>
+    <div className="tl-ruler" {...scrub}>
       {ticks.map((s) => <span key={s} className="tl-tick" style={{ left: s * zoom }}>{clock(s)}</span>)}
     </div>
   );
@@ -262,7 +295,9 @@ function DragClip({ left, width, zoom, className, title, onSelect, onDrop, child
   );
 }
 
-function VideoClip({ c, i, n, zoom, selected, onSelect, tl, sourceS }) {
+function VideoClip({ c, i, n, next, zoom, selected, onSelect, tl, sourceS }) {
+  // Joinable: the next clip continues exactly where this one ends in the source (an undone cut).
+  const joinable = next && Math.abs(next.src_in - c.src_out) < 1e-3;
   const len = c.src_out - c.src_in;
   const [trim, setTrim] = useState(null);     // {side, dx}
   const startX = useRef(0);
@@ -289,6 +324,7 @@ function VideoClip({ c, i, n, zoom, selected, onSelect, tl, sourceS }) {
       <span className="tl-clip-actions">
         {i > 0 && <button onClick={(e) => { e.stopPropagation(); tl.run([{ type: "video.move", clip_id: c.id, index: i - 1 }]); }} title="Move earlier">◀</button>}
         {i < n - 1 && <button onClick={(e) => { e.stopPropagation(); tl.run([{ type: "video.move", clip_id: c.id, index: i + 1 }]); }} title="Move later">▶</button>}
+        {joinable && <button onClick={(e) => { e.stopPropagation(); tl.run([{ type: "video.join", clip_id: c.id, next_id: next.id }]); }} title="Join with the next clip">⊕</button>}
         {n > 1 && <button onClick={(e) => { e.stopPropagation(); tl.run([{ type: "video.delete", clip_id: c.id }]); }} title="Delete (voice in it disappears)">✕</button>}
       </span>
       <span className="tl-handle out" {...handle("out")} />
@@ -341,8 +377,12 @@ function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media,
         {vc.detached_t == null
           ? num("Offset (s)", vc.offset, (v) => set({ offset: v }), { min: -30, max: 30 })
           : num("Position (s)", vc.detached_t, (v) => set({ detached_t: v }), { min: 0 })}
-        {num("Trim start (s)", vc.trim_in, (v) => set({ trim_in: v }), { min: 0 })}
-        {num("Trim end (s)", vc.trim_out, (v) => set({ trim_out: v }), { min: 0 })}
+        {num("Cut from start (s)", vc.trim_in, (v) => set({ trim_in: v }), { min: 0 })}
+        {num("Cut from end (s)", vc.trim_out, (v) => set({ trim_out: v }), { min: 0 })}
+        <p className="caption dim">
+          Plays {(Math.max(0, Number(c.audio_duration_s || 0) - vc.trim_in - vc.trim_out)).toFixed(2)} s
+          of {Number(c.audio_duration_s || 0).toFixed(2)} s. 0 means nothing is cut.
+        </p>
         {num("Gain (dB)", vc.gain_db, (v) => set({ gain_db: v }), { min: -60, max: 12, step: 1 })}
         <label className="tl-check"><input type="checkbox" checked={vc.muted} onChange={(e) => set({ muted: e.target.checked })} /> Mute</label>
         <label className="tl-check" title="A detached clip stays put when the video is cut or reordered">
@@ -389,6 +429,28 @@ function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media,
         <h3 className="tl-insp-title">Video clip</h3>
         <p className="body-sm">Source {clock(c.src_in)} – {clock(c.src_out)}</p>
         <p className="caption dim">Voice anchored inside this clip moves with it, and disappears if the clip is deleted.</p>
+        <div className="tl-insp-actions">
+          {(() => {
+            const i = doc.video.findIndex((x) => x.id === c.id);
+            const nx = doc.video[i + 1], pv = doc.video[i - 1];
+            return (
+              <>
+                {pv && Math.abs(pv.src_out - c.src_in) < 1e-3 && (
+                  <button className="btn btn-quiet btn-xs" onClick={() => tl.run([{ type: "video.join", clip_id: pv.id, next_id: c.id }])}>Join with previous</button>
+                )}
+                {nx && Math.abs(c.src_out - nx.src_in) < 1e-3 && (
+                  <button className="btn btn-quiet btn-xs" onClick={() => tl.run([{ type: "video.join", clip_id: c.id, next_id: nx.id }])}>Join with next</button>
+                )}
+                {doc.video.length > 1 && (
+                  <button className="btn btn-quiet btn-xs" onClick={() => { tl.run([{ type: "video.delete", clip_id: c.id }]); setSel(null); }}>Delete clip</button>
+                )}
+              </>
+            );
+          })()}
+        </div>
+        {doc.video.length > 1 && !doc.video.some((x, j) => j > 0 && Math.abs(doc.video[j - 1].src_out - x.src_in) < 1e-3) && (
+          <p className="caption dim">Clips can be joined only when they're next to each other and continue the same footage.</p>
+        )}
       </aside>
     );
   }

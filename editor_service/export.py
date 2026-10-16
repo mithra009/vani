@@ -5,7 +5,7 @@ video  : trim/setpts per clip → concat → scale to the chosen height (never u
 audio  : original audio cut like the video, gain + optional auto-duck under the voice;
          each voice clip atrim + adelay to its timeline position; music with afade;
          amix (overlaps mixed, D6) → loudnorm → exactly duration_t long
-captions (C3-proposal): SRT/VTT sidecar, or burned in with the subtitles filter
+captions (C3-proposal): SRT/VTT sidecar, or burned in from an ASS file with complex shaping
 """
 
 from __future__ import annotations
@@ -130,6 +130,44 @@ def captions_file(captions: list[dict], kind: str) -> str:
     return "\n".join(lines)
 
 
+def output_height(plan: Plan) -> int:
+    h = min(plan.height or plan.source_height, plan.source_height)
+    return h - h % 2
+
+
+def _ass_ts(s: float) -> str:
+    cs = round(s * 100)
+    h, cs = divmod(cs, 360_000)
+    m, cs = divmod(cs, 6000)
+    sec, cs = divmod(cs, 100)
+    return f"{h}:{m:02d}:{sec:02d}.{cs:02d}"
+
+
+def captions_ass(captions: list[dict], height: int) -> str:
+    """Burn-in captions as ASS, laid out for an output `height` px tall (16:9 canvas; libass
+    scales horizontally for other ratios). Noto Sans, with fontconfig falling back to the
+    matching Noto script font; white text, dark outline, bottom-centre."""
+    size = max(14, round(height * 0.055))
+    outline = max(1, round(height / 360))
+    margin = round(height * 0.06)
+    head = [
+        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {round(height * 16 / 9)}", f"PlayResY: {height}",
+        "WrapStyle: 0", "ScaledBorderAndShadow: yes", "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
+        "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
+        "MarginR, MarginV, Encoding",
+        f"Style: Default,Noto Sans,{size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,"
+        f"{outline},0,2,{margin},{margin},{margin},1",
+        "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    rows = []
+    for c in sorted(captions, key=lambda c: c["start"]):
+        text = " ".join(str(c["text"]).split()).replace("{", "(").replace("}", ")")   # no ASS override tags
+        rows.append(f"Dialogue: 0,{_ass_ts(c['start'])},{_ass_ts(c['end'])},Default,,0,0,0,,{text}")
+    return "\n".join(head + rows) + "\n"
+
+
 def build_args(plan: Plan, out: str) -> list[str]:
     """Full ffmpeg argv (without the binary). Inputs: 0 = source, then voices, then music."""
     audio_only = plan.fmt in AUDIO_FORMATS
@@ -145,9 +183,10 @@ def build_args(plan: Plan, out: str) -> list[str]:
         for i, (a, b) in enumerate(plan.video_clips):
             f.append(f"[0:v]trim=start={a:.6f}:end={b:.6f},setpts=PTS-STARTPTS[v{i}]")
         f.append("".join(f"[v{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[vcat]")
-        h = min(plan.height or plan.source_height, plan.source_height)
-        h -= h % 2
-        sub = f",subtitles={plan.burn_captions}" if plan.burn_captions else ""
+        h = output_height(plan)
+        # ASS + complex shaping: Indic scripts need HarfBuzz shaping or conjuncts fall apart
+        # (ತ್ತ renders as ತತ). The file is sized to this output (captions_ass).
+        sub = f",ass={plan.burn_captions}:shaping=complex" if plan.burn_captions else ""
         f.append(f"[vcat]scale=-2:{h}:flags=lanczos,setsar=1{sub}[vout]")
 
     def fmt_audio(label_in: str, label_out: str, extra: str = "") -> str:
