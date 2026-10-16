@@ -182,4 +182,14 @@ system startup
 .venv\Scripts\python -m uvicorn media_service.main:app --port 8020
 .venv\Scripts\python -m media_service.worker
 (Vite should still be up — npm run dev in frontend/ if not.)
+
+
+
+#	Command	Purpose
+1	$env:FAKE_PROVIDERS="0"; .venv\Scripts\python -m uvicorn backend.app.main:app --port 8010	Pipeline API
+2	$env:FAKE_PROVIDERS="1"; .venv\Scripts\python -m uvicorn media_service.main:app --port 8020	Library/uploads API
+3	$env:FAKE_PROVIDERS="1"; .venv\Scripts\python -m media_service.worker	FFmpeg probe/thumbnail worker
+4	$env:FAKE_PROVIDERS="1"; .venv\Scripts\python -m uvicorn editor_service.main:app --port 8030	Editor API
+5	$env:FAKE_PROVIDERS="1"; .venv\Scripts\python -m editor_service.worker	Editor export worker
+6	cd frontend; npm run dev	UI at http://localhost:5173 (http://localhost:5173) (proxies /api → 8010/8020/8030)
 ```
