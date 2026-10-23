@@ -105,8 +105,9 @@ jobs:
       - name: Health check
         run: |
           for i in $(seq 1 30); do
-            if curl -fsS "http://${{ secrets.EC2_HOST }}/api/health" >/dev/null \
-               && curl -fsS "http://${{ secrets.EC2_HOST }}/api/editor/health" >/dev/null; then
+            # -k: the certificate is for the sslip.io name, not the bare IP.
+            if curl -fsSk "https://${{ secrets.EC2_HOST }}/api/health" >/dev/null \
+               && curl -fsSk "https://${{ secrets.EC2_HOST }}/api/editor/health" >/dev/null; then
               echo "Healthy"; exit 0
             fi
             sleep 10

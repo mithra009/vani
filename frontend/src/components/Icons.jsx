@@ -6,6 +6,15 @@ export const Logo = () => (
   </svg>
 );
 
+// The logo's five bars, pulsing one after another left to right: the app-wide loading indicator.
+export const Loader = ({ size = 18, style }) => (
+  <svg className="loader" viewBox="0 0 24 24" width={size} height={size} style={style} role="img" aria-label="Loading">
+    {[[5, 9, 15], [9, 6.5, 17.5], [13, 4, 20], [17, 7.5, 16.5], [21, 10.5, 13.5]].map(([x, y1, y2], i) => (
+      <path key={x} d={`M${x} ${y1}V${y2}`} {...base} strokeWidth={2.2} style={{ animationDelay: `${i * 0.12}s` }} />
+    ))}
+  </svg>
+);
+
 export const UploadIcon = (p) => (
   <svg viewBox="0 0 56 56" aria-hidden="true" {...p}>
     <rect x="6" y="12" width="44" height="32" rx="7" {...base} />

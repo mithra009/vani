@@ -136,14 +136,18 @@ async def handle_generate(pool, job: dict, project: dict, workdir: Path) -> None
         if not transcript.text:
             raise InputInvalid("The script is empty.", "empty_script")
     else:
+        await db.set_stage(pool, job["project_id"], "audio")
         audio = await source_audio(pool, project, workdir)
+        await db.set_stage(pool, job["project_id"], "transcribe")
         segments = await transcribe(pool, speech, project, audio, workdir)
         transcript = chunking.build_transcript(segments)
         if not transcript.text:
             raise InputInvalid("No speech was found in the audio.", "no_speech")
 
     owner = str(project["owner_id"])
+    await db.set_stage(pool, job["project_id"], "chunk")
     chunks = await cut_chunks(pool, owner, lang_llm, transcript, project["src_lang"])
+    await db.set_stage(pool, job["project_id"], "translate")
     texts = await translate(pool, owner, lang_llm, chunks, project["src_lang"], project["tgt_lang"])
     anchors = (placement.place_script(chunks, duration, DEFAULT_CPS, SCRIPT_GAP_S)
                if project["input_kind"] == "script" else placement.place_speech(transcript, chunks))

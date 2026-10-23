@@ -40,7 +40,8 @@ export class PreviewEngine {
   _buffer(key, urlPromise) {
     if (!this.buffers.has(key)) {
       const p = urlPromise()
-        .then((url) => fetch(url))
+        // no-store: an <audio> tag may have cached this URL without CORS headers, which fails a fetch.
+        .then((url) => fetch(url, { cache: "no-store" }))
         .then((r) => { if (!r.ok) throw new Error(`audio download failed (${r.status})`); return r.arrayBuffer(); })
         .then((ab) => this.ctx.decodeAudioData(ab));
       p.catch(() => this.buffers.delete(key));   // let a later play retry

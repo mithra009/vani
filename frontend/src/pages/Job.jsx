@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Loader } from "../components/Icons.jsx";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { langName } from "../lib/catalog.js";
@@ -47,7 +48,7 @@ export default function Job({ mode }) {
       </div>
     );
   }
-  if (!job) return <div className="progress-wrap"><div className="spinner" style={{ margin: "0 auto" }} /></div>;
+  if (!job) return <div className="progress-wrap"><Loader size={36} style={{ margin: "0 auto" }} /></div>;
 
   async function run(fn) {
     setBusy(true);

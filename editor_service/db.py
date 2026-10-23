@@ -164,6 +164,11 @@ async def fail_project(pool: asyncpg.Pool, project_id: str, code: str, message: 
     )
 
 
+async def set_stage(pool: asyncpg.Pool, project_id: str, stage: str | None) -> None:
+    """Which generate step is running, for the editor's progress view (touches updated_at → SSE)."""
+    await pool.execute("update editor_projects set stage = $2 where id = $1", project_id, stage)
+
+
 async def settle_project(conn, project_id: str) -> None:
     """generating → editing once no chunk is pending/generating (failed chunks stay visible)."""
     await conn.execute(
@@ -450,6 +455,10 @@ REQUIRED_SCHEMA = {
     "exports": "006_editor_exports.sql",
     "provider_calls": "007_rate_limits.sql",
 }
+REQUIRED_COLUMNS = {
+    ("editor_jobs", "export_id"): "006_editor_exports.sql",
+    ("editor_projects", "stage"): "008_project_stage.sql",
+}
 
 
 async def check_schema(pool: asyncpg.Pool) -> None:
@@ -460,12 +469,13 @@ async def check_schema(pool: asyncpg.Pool) -> None:
     )
     missing = [t for t in REQUIRED_SCHEMA if t not in {r["table_name"] for r in rows}]
     if not missing:
-        has_export_col = await pool.fetchval(
-            "select 1 from information_schema.columns where table_schema = 'public' "
-            "and table_name = 'editor_jobs' and column_name = 'export_id'")
-        if not has_export_col:
-            missing = ["editor_jobs.export_id"]
-            REQUIRED_SCHEMA["editor_jobs.export_id"] = "006_editor_exports.sql"
+        for (table, column), migration in REQUIRED_COLUMNS.items():
+            has_col = await pool.fetchval(
+                "select 1 from information_schema.columns where table_schema = 'public' "
+                "and table_name = $1 and column_name = $2", table, column)
+            if not has_col:
+                missing.append(f"{table}.{column}")
+                REQUIRED_SCHEMA[f"{table}.{column}"] = migration
     if missing:
         files = sorted({REQUIRED_SCHEMA[t] for t in missing})
         raise RuntimeError(

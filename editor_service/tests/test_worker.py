@@ -24,6 +24,7 @@ class Mem:
     def __init__(self, project):
         self.project, self.chunks, self.artifacts, self.blobs = project, {}, {}, {}
         self.jobs, self.finished, self.project_fail, self.chunk_fail = [], [], None, {}
+        self.stages = []
 
     def install(self, mp):
         mem = self
@@ -68,8 +69,11 @@ class Mem:
         async def project_for_job(_, job):
             return mem.project
 
+        async def set_stage(_, pid, stage):
+            mem.stages.append(stage)
+
         for fn in (artifact_get, artifact_put, replace_chunks, chunk_generating, chunk_audio_ready,
-                   chunk_failed, fail_project, finish_job, claim_job, project_for_job):
+                   chunk_failed, fail_project, finish_job, claim_job, project_for_job, set_stage):
             mp.setattr(db, fn.__name__, fn)
 
         async def download(key, dst: Path):

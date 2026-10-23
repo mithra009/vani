@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Check, Dot } from "./Icons.jsx";
+import { Check, Dot, Loader } from "./Icons.jsx";
 
 export const TRANSCRIBE_STAGES = [
   { key: "ingest", name: "Preparing video", sub: "Checking the file and extracting audio" },
@@ -43,7 +43,7 @@ export default function StageProgress({ title, lead, stages, job }) {
           return (
             <li key={s.key} className={`stage ${state}`}>
               <span className="stage-icon">
-                {state === "done" ? <Check /> : state === "active" ? <span className="spinner" /> : <Dot />}
+                {state === "done" ? <Check /> : state === "active" ? <Loader /> : <Dot />}
               </span>
               <span>
                 <span className="stage-name">{s.name}</span>

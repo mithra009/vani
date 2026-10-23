@@ -3,6 +3,7 @@
 // tool strip, track headers (V1 / A1–A3 / C1), a ruler and a draggable playhead.
 // Edits apply locally at once with undo/redo + autosave; preview is live Web Audio.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader } from "./Icons.jsx";
 import * as editor from "../lib/editorApi.js";
 import { uploadToStorage } from "../lib/libraryStore.js";
 import { api } from "../lib/api.js";
@@ -135,7 +136,7 @@ export default function TimelineEditor({ project, chunks }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (tl.status === "loading") return <div className="pp pp-loading"><div className="spinner" /></div>;
+  if (tl.status === "loading") return <div className="pp pp-loading"><Loader size={36} /></div>;
   if (tl.status === "error") return <div className="banner error" role="alert"><span className="banner-dot" />Timeline failed to load: {tl.error}</div>;
 
   const doc = tl.doc;

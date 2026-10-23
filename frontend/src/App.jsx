@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { initApi } from "./lib/api.js";
 import { Toaster } from "./lib/toast.jsx";
 import { AuthProvider, useAuth } from "./lib/auth.jsx";
-import { Logo } from "./components/Icons.jsx";
+import { Loader, Logo } from "./components/Icons.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
 
 // Every other page loads on demand, so /signin downloads only what it renders.
@@ -15,7 +15,7 @@ const Projects = lazy(() => import("./pages/Projects.jsx"));
 const Job = lazy(() => import("./pages/Job.jsx"));
 const EditorProject = lazy(() => import("./pages/Editor.jsx"));
 const NewEditorProject = lazy(() => import("./pages/NewEditorProject.jsx"));
-const PageLoading = () => <div className="progress-wrap"><div className="spinner" style={{ margin: "0 auto" }} /></div>;
+const PageLoading = () => <div className="progress-wrap"><Loader size={36} style={{ margin: "0 auto" }} /></div>;
 
 export default function App() {
   const [mode, setMode] = useState(null);
@@ -61,7 +61,7 @@ function Shell({ mode }) {
 
       <main>
         {!ready ? (
-          <div className="progress-wrap"><div className="spinner" style={{ margin: "0 auto" }} /></div>
+          <div className="progress-wrap"><Loader size={36} style={{ margin: "0 auto" }} /></div>
         ) : (
           <Suspense fallback={<PageLoading />}>
           <Routes>

@@ -10,7 +10,7 @@ SWAP_GB=4
 
 echo "==> Packages and automatic security updates"
 sudo apt-get update -y
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl rsync ufw unattended-upgrades
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl rsync ufw unattended-upgrades certbot
 sudo dpkg-reconfigure -f noninteractive unattended-upgrades
 
 echo "==> Docker Engine + Compose plugin"
@@ -31,11 +31,12 @@ fi
 sudo sysctl -w vm.swappiness=10 >/dev/null
 grep -q '^vm.swappiness' /etc/sysctl.conf || echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
 
-echo "==> Firewall: only SSH (22) and HTTP (80) in. App ports stay on Docker's private network."
+echo "==> Firewall: only SSH (22), HTTP (80) and HTTPS (443) in. App ports stay on Docker's private network."
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow OpenSSH
 sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 sudo ufw --force enable
 
 echo "==> App folder ${APP_DIR}"

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Loader } from "../components/Icons.jsx";
 import { Link, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import * as editor from "../lib/editorApi.js";
@@ -92,7 +93,7 @@ export default function EditorProject() {
   }
 
   if (!data) {
-    return <div className="progress-wrap"><div className="spinner" style={{ margin: "0 auto" }} /></div>;
+    return <div className="progress-wrap"><Loader size={36} style={{ margin: "0 auto" }} /></div>;
   }
 
   const { project, chunks } = data;
@@ -283,23 +284,52 @@ function VoicePicker({ project }) {
 
 // ─────────────────────────────────── Chunk list ───────────────────────────────
 
+// Generate steps as the worker reports them in project.stage (a script skips audio + transcribe).
+const GEN_STEPS = [
+  ["audio", "Extracting audio"],
+  ["transcribe", "Transcribing speech"],
+  ["chunk", "Splitting into chunks"],
+  ["translate", "Translating"],
+  ["voice", "Voicing chunks"],
+];
+
+function GenerateProgress({ project }) {
+  const steps = GEN_STEPS.filter(([id]) => project.input_kind !== "script" || !["audio", "transcribe"].includes(id));
+  const at = Math.max(0, steps.findIndex(([id]) => id === project.stage));
+  return (
+    <div className="progress-wrap" style={{ margin: "32px auto" }}>
+      <div className="bar"><span style={{ width: `${Math.round(((at + 0.5) / steps.length) * 100)}%` }} /></div>
+      <ul className="stage-list" style={{ marginTop: 20 }}>
+        {steps.map(([id, name], i) => (
+          <li key={id} className={`stage ${i < at ? "done" : i === at ? "on" : "pending"}`}>
+            <span className="stage-icon">{i < at ? "✓" : i === at ? <Loader /> : "·"}</span>
+            <span className="stage-name">{name}</span>
+            <span className="stage-pct">{i < at ? "Done" : i === at ? "Working…" : ""}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ChunkList({ project, chunks }) {
   if (!chunks || chunks.length === 0) {
-    if (project.status === "generating") {
-      return <p className="dim" style={{ textAlign: "center", padding: 40 }}>Generating chunks…</p>;
-    }
+    if (project.status === "generating") return <GenerateProgress project={project} />;
     return <p className="dim" style={{ textAlign: "center", padding: 40 }}>No chunks yet.</p>;
   }
 
+  const ready = chunks.filter((c) => c.status === "ready").length;
+  const failed = chunks.filter((c) => c.status === "failed").length;
+  const voicing = project.status === "generating" && ready + failed < chunks.length;
   return (
     <div className="editor-chunks">
       <div className="editor-chunks-head">
         <span className="body-sm dim">{chunks.length} chunk{chunks.length !== 1 ? "s" : ""}</span>
         <span className="body-sm dim">
-          {chunks.filter((c) => c.status === "ready").length} ready,{" "}
-          {chunks.filter((c) => c.status === "failed").length} failed
+          {voicing ? `Voicing ${ready + failed + 1} of ${chunks.length} · ` : ""}{ready} ready, {failed} failed
         </span>
       </div>
+      {voicing && <div className="bar" style={{ margin: "0 0 10px" }}><span style={{ width: `${Math.round(((ready + failed) / chunks.length) * 100)}%` }} /></div>}
       {chunks.map((c) => <ChunkRow key={c.id} chunk={c} project={project} />)}
     </div>
   );
