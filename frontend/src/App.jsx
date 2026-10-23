@@ -49,12 +49,6 @@ function Shell({ mode }) {
               <Link to="/new" className="nav-cta">New project</Link>
             </div>
           )}
-          {mode && (
-            <span className={`mode-pill ${mode === "live" ? "live" : ""}`} style={signedIn ? undefined : { marginLeft: "auto" }}
-                  title={mode === "live" ? "Connected to the backend" : "Backend not running: simulated pipeline with sample data"}>
-              {mode === "live" ? "Live" : "Demo mode"}
-            </span>
-          )}
           {gated && status === "signed_in" && <UserMenu />}
         </nav>
       </header>

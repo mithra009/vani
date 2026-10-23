@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { api } from "../lib/api.js";
+import * as editorApi from "../lib/editorApi.js";
 import { useAuth } from "../lib/auth.jsx";
 import { langName } from "../lib/catalog.js";
 import { refreshLibrary, useLibrary } from "../lib/libraryStore.js";
@@ -20,6 +21,7 @@ const STATUS = {
   awaiting_narration: "Waiting for narration", transcribing: "Transcribing", review: "Ready to review",
   dubbing: "Dubbing", done: "Done", failed: "Failed",
 };
+const EDITOR_STATUS = { draft: "Draft", generating: "Generating", editing: "Ready to edit", failed: "Failed" };
 
 function greeting() {
   const h = new Date().getHours();
@@ -75,7 +77,14 @@ export default function Landing({ mode }) {
   const [projects, setProjects] = useState(null);
 
   useEffect(() => {
-    api.listJobs().then(setProjects).catch(() => setProjects([]));
+    // Both services hold projects (same list as the Projects page); either one failing still shows the other.
+    Promise.all([
+      api.listJobs().catch(() => []).then((js) => js.map((j) => ({
+        id: `job:${j.id}`, name: j.name, status: STATUS[j.status] || j.status,
+        created_at: typeof j.created_at === "number" ? j.created_at : Date.parse(j.created_at) }))),
+      editorApi.listProjects().catch(() => []).then((ps) => ps.map((p) => ({
+        id: `ed:${p.id}`, name: p.name, status: EDITOR_STATUS[p.status] || p.status, created_at: Date.parse(p.created_at) }))),
+    ]).then(([a, b]) => setProjects([...a, ...b].sort((x, y) => (y.created_at || 0) - (x.created_at || 0))));
   }, []);
 
   const first = profile?.first_name;
@@ -123,7 +132,7 @@ export default function Landing({ mode }) {
                   {recent.map((p) => (
                     <li key={p.id}>
                       <span className="ws-name">{p.name}</span>
-                      <span className="ws-meta">{STATUS[p.status] || p.status}, {ago(p.created_at)}</span>
+                      <span className="ws-meta">{p.status}, {ago(p.created_at)}</span>
                     </li>
                   ))}
                 </ul>
