@@ -13,6 +13,8 @@ x-python: &python
   image: vani-python:latest
   env_file: .env
   restart: unless-stopped
+  volumes:
+    - ./config/limits.toml:/app/config/limits.toml:ro   # edit + restart, no rebuild
   environment: &python-env
     FAKE_PROVIDERS: ${FAKE_PROVIDERS:-1}
     FFMPEG_BIN_DIR: ""                       # .env may hold a Windows path; ffmpeg is on PATH here

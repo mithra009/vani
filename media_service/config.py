@@ -7,6 +7,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .limits import limit
+
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
 
@@ -22,6 +24,15 @@ SUPABASE_JWKS_URL = os.getenv(
 ).strip()
 
 MEDIA_BUCKET = os.getenv("SUPABASE_MEDIA_BUCKET", "media").strip() or "media"
+
+# Object storage for every file (videos, thumbnails, proxies, voice audio, exports).
+# "s3" when S3_BUCKET is set, otherwise the Supabase bucket. Tables stay in Supabase either way.
+# AWS credentials come from the standard AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY variables.
+S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
+AWS_REGION = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip()
+# Optional: an S3-compatible endpoint (local test server, MinIO). Unset for AWS.
+S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL", "").strip()
+STORAGE_BACKEND = (os.getenv("STORAGE_BACKEND") or ("s3" if S3_BUCKET else "supabase")).strip().lower()
 MEDIA_API_PORT = int(os.getenv("MEDIA_API_PORT", "8020"))
 ALLOWED_ORIGINS = [
     o.strip()
@@ -33,10 +44,11 @@ ALLOWED_ORIGINS = [
 AUTH_DISABLED = os.getenv("VANI_AUTH_DISABLED", "0") == "1"
 
 # Limits enforced before an upload URL is issued (mirrors backend/app/config.py).
-MAX_VIDEO_SECONDS = int(os.getenv("MAX_VIDEO_SECONDS", "600"))
-MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(500_000_000)))
-ASSET_MAX_COUNT = int(os.getenv("ASSET_MAX_COUNT", "200"))
-ASSET_MAX_TOTAL_BYTES = int(os.getenv("ASSET_MAX_TOTAL_BYTES", str(20_000_000_000)))
+# Values live in config/limits.toml ([uploads]); env vars still override.
+MAX_VIDEO_SECONDS = limit("uploads", "max_video_seconds", 600, "MAX_VIDEO_SECONDS")
+MAX_UPLOAD_BYTES = limit("uploads", "max_upload_mb", 500_000_000, "MAX_UPLOAD_BYTES", scale=1_000_000)
+ASSET_MAX_COUNT = limit("uploads", "max_videos_per_user", 200, "ASSET_MAX_COUNT")
+ASSET_MAX_TOTAL_BYTES = limit("uploads", "max_storage_gb_per_user", 20_000_000_000, "ASSET_MAX_TOTAL_BYTES", scale=1_000_000_000)
 
 # Signed URLs are short-lived and never stored.
 SIGNED_URL_TTL_SECONDS = int(os.getenv("SIGNED_URL_TTL_SECONDS", "3600"))

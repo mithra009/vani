@@ -58,6 +58,12 @@ class Conflict(EditorError):
     http_status = 409
 
 
+class LimitReached(EditorError):
+    """A per-user limit (projects, generations at once, queued exports)."""
+    code = "limit_reached"
+    http_status = 429
+
+
 class Skip(Exception):
     """Job became irrelevant (stale chunk revision, deleted project). Recorded as SKIPPED."""
 

@@ -1,0 +1,49 @@
+# Production overrides for the EC2 server (8 GB RAM). Used together with docker-compose.yml:
+#     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Only nginx (frontend) is published, on port 80; every app service stays on Docker's private
+# network. Memory limits keep one runaway process from taking the box down (sum ≈ 6.3 GB, leaving
+# room for the OS and Docker). Logs rotate so the disk can't fill.
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+services:
+  backend:
+    restart: always
+    logging: *logging
+    mem_limit: 1g
+    environment:
+      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env, e.g. http://13.233.10.20}
+
+  media-api:
+    restart: always
+    logging: *logging
+    mem_limit: 512m
+    environment:
+      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN}
+
+  media-worker:
+    restart: always
+    logging: *logging
+    mem_limit: 1536m          # ffmpeg proxy encodes; downloads stream to disk, not RAM
+
+  editor-api:
+    restart: always
+    logging: *logging
+    mem_limit: 512m
+    environment:
+      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN}
+
+  editor-worker:
+    restart: always
+    logging: *logging
+    mem_limit: 2g             # ffmpeg export renders
+
+  frontend:
+    restart: always
+    logging: *logging
+    mem_limit: 128m
+    ports: !override
+      - "80:80"

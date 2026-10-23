@@ -176,6 +176,22 @@ async def settle_project(conn, project_id: str) -> None:
 
 # ------------------------------------------------------------------ chunks
 
+# Lock order, everywhere: the project row first, then its chunks. Every transaction that changes
+# a project's chunks takes the project lock up front, so two of them can never hold locks in
+# opposite orders (the deadlock the concurrency tests found between set_voice and chunk edits).
+# Edits within one project queue for milliseconds; other projects are unaffected.
+async def _lock_project(conn, project_id) -> None:
+    await conn.execute("select 1 from editor_projects where id = $1 for update", project_id)
+
+
+async def _lock_project_of_chunk(conn, chunk_id):
+    """Lock the project that owns this chunk; returns its id, or None if the chunk is gone."""
+    pid = await conn.fetchval("select project_id from chunks where id = $1", chunk_id)
+    if pid is not None:
+        await _lock_project(conn, pid)
+    return pid
+
+
 async def list_chunks(pool_or_conn, project_id: str, owner_id: str) -> list[dict]:
     rows = await pool_or_conn.fetch(
         "select * from chunks where project_id = $1 and owner_id = $2 order by idx", project_id, owner_id,
@@ -187,6 +203,7 @@ async def replace_chunks(pool: asyncpg.Pool, project_id: str, owner_id: str, row
                          duration_s: float | None) -> list[dict]:
     """Write the generate result and queue one tts job per chunk, atomically."""
     async with pool.acquire() as conn, conn.transaction():
+        await _lock_project(conn, project_id)
         await conn.execute("delete from chunks where project_id = $1", project_id)
         out = []
         for r in rows:
@@ -212,6 +229,7 @@ async def edit_chunk(pool: asyncpg.Pool, project_id: str, owner_id: str, chunk_i
         raise ValueError(f"Editable fields are {sorted(allowed)}.")
     sets = ", ".join(f"{k} = ${i + 5}" for i, k in enumerate(changes))
     async with pool.acquire() as conn, conn.transaction():
+        await _lock_project(conn, project_id)
         c = await conn.fetchrow(
             f"update chunks set {sets}, revision = revision + 1, status = 'pending', "
             "  error_code = null, error_message = null "
@@ -234,6 +252,7 @@ async def edit_chunk(pool: asyncpg.Pool, project_id: str, owner_id: str, chunk_i
 async def regenerate_chunk(pool: asyncpg.Pool, project_id: str, owner_id: str, chunk_id: str) -> dict:
     """Retry a failed chunk (or re-roll a ready one) without changing its content."""
     async with pool.acquire() as conn, conn.transaction():
+        await _lock_project(conn, project_id)
         c = await conn.fetchrow(
             "update chunks set revision = revision + 1, status = 'pending', error_code = null, error_message = null "
             "where id = $1 and project_id = $2 and owner_id = $3 and status in ('ready', 'failed') returning *",
@@ -256,6 +275,8 @@ async def chunk_audio_ready(pool: asyncpg.Pool, chunk_id: str, revision: int, au
                             duration_s: float) -> bool:
     """Stale-result guard: only the job for the current revision may write. False → stale."""
     async with pool.acquire() as conn, conn.transaction():
+        if await _lock_project_of_chunk(conn, chunk_id) is None:
+            return False
         c = await conn.fetchrow(
             "update chunks set audio_key = $3, audio_duration_s = $4, status = 'ready' "
             "where id = $1 and revision = $2 returning project_id",
@@ -269,6 +290,8 @@ async def chunk_audio_ready(pool: asyncpg.Pool, chunk_id: str, revision: int, au
 
 async def chunk_failed(pool: asyncpg.Pool, chunk_id: str, revision: int, code: str, message: str) -> None:
     async with pool.acquire() as conn, conn.transaction():
+        if await _lock_project_of_chunk(conn, chunk_id) is None:
+            return
         c = await conn.fetchrow(
             "update chunks set status = 'failed', error_code = $3, error_message = $4 "
             "where id = $1 and revision = $2 returning project_id",
@@ -330,18 +353,42 @@ async def _enqueue_tts(conn, project_id: str, owner_id: str, chunk_id: str, revi
 
 
 async def claim_job(pool: asyncpg.Pool) -> dict | None:
-    """Whole-project generate jobs first, then chunk tts jobs, oldest first."""
+    """Fair claiming: the job whose owner has the fewest jobs running goes next, so one user's
+    200 queued chunks can't starve someone else's 3. Then whole-project jobs before chunk tts,
+    then oldest first."""
     r = await pool.fetchrow(
         "update editor_jobs set status = 'RUNNING', attempts = attempts + 1, started_at = now() "
         "where id = ("
-        "  select id from editor_jobs"
-        "  where status in ('PENDING', 'FAILED') and run_after <= now() and attempts < $1"
-        "  order by (kind = 'tts'), created_at"
+        "  select j.id from editor_jobs j"
+        "  where j.status in ('PENDING', 'FAILED') and j.run_after <= now() and j.attempts < $1"
+        "  order by (select count(*) from editor_jobs r where r.owner_id = j.owner_id and r.status = 'RUNNING'),"
+        "           (j.kind = 'tts'), j.created_at"
         "  for update skip locked limit 1"
         ") returning *",
         JOB_MAX_ATTEMPTS,
     )
     return _row(r)
+
+
+async def defer_job(pool: asyncpg.Pool, job: dict, delay_s: float, reason: str) -> None:
+    """Put a rate-limited job back in the queue for later. It doesn't count as an attempt."""
+    await pool.execute(
+        "update editor_jobs set status = 'PENDING', attempts = greatest(attempts - 1, 0), started_at = null, "
+        "  run_after = now() + make_interval(secs => $2), last_error = $3 where id = $1",
+        job["id"], float(delay_s), reason[:500],
+    )
+
+
+async def user_counts(pool: asyncpg.Pool, owner_id: str) -> dict:
+    """What the per-user limits look at, in one round trip."""
+    r = await pool.fetchrow(
+        "select (select count(*) from editor_projects where owner_id = $1 and deleted_at is null) as projects, "
+        "  (select count(*) from editor_projects where owner_id = $1 and deleted_at is null and status = 'generating') as generating, "
+        "  (select count(*) from exports where owner_id = $1 and status in ('queued', 'rendering')) as exports, "
+        "  (select count(distinct owner_id) from editor_jobs where status in ('PENDING', 'RUNNING')) as active_users",
+        owner_id,
+    )
+    return dict(r)
 
 
 async def finish_job(pool: asyncpg.Pool, job: dict, *, outcome: str, code: str | None = None,
@@ -401,6 +448,7 @@ REQUIRED_SCHEMA = {
     "timeline_ops": "005_editor_timeline.sql",
     "project_media": "005_editor_timeline.sql",
     "exports": "006_editor_exports.sql",
+    "provider_calls": "007_rate_limits.sql",
 }
 
 
@@ -534,6 +582,7 @@ async def split_chunk(pool: asyncpg.Pool, project_id: str, owner_id: str, chunk_
     """Split one chunk's text at a character; both halves regenerate. The source span and the
     anchor are divided in proportion to the text lengths (an estimate the user can drag)."""
     async with pool.acquire() as conn, conn.transaction():
+        await _lock_project(conn, project_id)
         c = await conn.fetchrow(
             "select * from chunks where id = $1 and project_id = $2 and owner_id = $3 for update",
             chunk_id, project_id, owner_id,
@@ -578,6 +627,7 @@ async def merge_chunks(pool: asyncpg.Pool, project_id: str, owner_id: str, first
                        second_id: str, second_rev: int) -> dict:
     """Merge a chunk with the one right after it; the first regenerates, the second is deleted."""
     async with pool.acquire() as conn, conn.transaction():
+        await _lock_project(conn, project_id)
         rows = await conn.fetch(
             "select * from chunks where id = any($1::uuid[]) and project_id = $2 and owner_id = $3 for update",
             [first_id, second_id], project_id, owner_id,

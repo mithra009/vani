@@ -73,7 +73,7 @@ export default function NarrationTake({ project }) {
     try {
       const init = await editor.narrationInit(project.id, ext);
       const file = new File([take.blob], `narration.${ext}`, { type: take.blob.type });
-      await uploadToStorage(file, init.uploadUrl, setProgress);
+      await uploadToStorage(file, init.uploadUrl, setProgress, init.uploadMethod);
       await editor.narrationComplete(project.id, ext);     // project → generating; SSE takes over
     } catch (e) {
       setErr(`Upload failed: ${e.message}. Your take is kept; try again.`);

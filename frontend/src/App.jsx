@@ -30,6 +30,7 @@ export default function App() {
 
 function Shell({ mode }) {
   const { status } = useAuth();
+  const loc = useLocation();
   // Demo mode (no backend) needs no account; live mode requires signing in.
   const gated = mode === "live";
   const ready = mode && (!gated || status !== "loading");
@@ -37,7 +38,7 @@ function Shell({ mode }) {
 
   return (
     <>
-      <header className="nav">
+      <header className={`nav ${/^\/editor\/(?!new)/.test(loc.pathname) ? "nav-wide" : ""}`}>
         <nav className="nav-inner" aria-label="Main">
           <Link to="/" className="logo"><Logo />Vani</Link>
           {signedIn && (

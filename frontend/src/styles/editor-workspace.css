@@ -1,0 +1,449 @@
+/* ================================================================
+   EDITOR WORKSPACE — pro NLE layout (Premiere Pro "Editing" workspace)
+   Effect Controls + Program monitor on top, Timeline panel below.
+   Contrast (measured): ivory clip labels 5.5–9.4:1 on every clip color;
+   muted text is never used on clips (≤3.9:1 there).
+   ================================================================ */
+
+.pp {
+  --pp-app: #121213;          /* gaps between panels */
+  --pp-panel: #232325;        /* panel body */
+  --pp-head: #1e1e20;         /* panel header strip */
+  --pp-lane: #1b1b1c;         /* track lane */
+  --pp-lane-alt: #1f1f21;
+  --pp-line: #2e2e31;         /* hairlines inside panels */
+  --pp-text: var(--text);     /* ivory, 13.9:1 on panel */
+  --pp-text-2: var(--text-2);
+  --pp-muted: var(--text-3);  /* 5.8:1 on panel */
+  --pp-accent: var(--blue);   /* playhead, active tool, timecode: 9.2:1 on header */
+  --pp-video: #4b4391;
+  --pp-voice: #2e6b48;
+  --pp-music: #22606d;
+  --pp-orig: #2c4436;
+  --pp-caption: #7a5d1c;
+  --pp-flag: #7a4a1c;
+  --pp-ruler-h: 28px;
+  --pp-row-h: 44px;
+  --pp-head-w: 148px;
+
+  display: flex; flex-direction: column; gap: 0;
+  height: max(620px, calc(100vh - var(--nav-h) - 128px));
+  background: var(--pp-app); border: 1px solid #0b0b0c; border-radius: 10px; overflow: hidden;
+  color: var(--pp-text); font-size: 13px;           /* macOS default text size (typography.md) */
+  user-select: none;
+}
+.pp-loading { display: grid; place-items: center; }
+
+/* ---------------------------------------------------------------- panels */
+.pp-top { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 2px; height: 58%; min-height: 240px; max-height: 64vh; flex: none; }
+.pp-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--pp-panel); }
+.pp-head { display: flex; align-items: center; gap: 10px; height: 32px; flex: none; padding: 0 10px;
+  background: var(--pp-head); border-bottom: 1px solid #0f0f10; }
+.pp-tab { font-size: 12px; font-weight: 600; color: var(--pp-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-tab b { color: var(--pp-text); font-weight: 600; }
+.pp-body { flex: 1; overflow-y: auto; padding: 12px 14px; user-select: text; }
+
+.pp-splitter { height: 6px; flex: none; cursor: row-resize; background: var(--pp-app); position: relative; }
+.pp-splitter::after { content: ""; position: absolute; left: 50%; top: 2px; width: 36px; height: 2px; margin-left: -18px;
+  border-radius: 1px; background: #3a3a3d; }
+.pp-splitter:hover::after { background: var(--pp-accent); }
+
+/* ---------------------------------------------------------------- program monitor */
+.pp-program { min-width: 0; }
+.pp-monitor { position: relative; flex: 1; min-height: 0; background: #0b0b0c; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 10px 16px; }
+/* The frame keeps its own aspect ratio inside the monitor: height decides the size, sides stay dark. */
+.pp-video { height: 100%; width: auto; max-width: 100%; aspect-ratio: 16 / 9; object-fit: contain; display: block; background: #000; min-height: 0; }
+.pp-video-empty { display: grid; place-items: center; color: var(--pp-muted); font-size: 13px; }
+.pp-caption { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); max-width: 86%; text-align: center;
+  background: rgba(0, 0, 0, .74); color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 15px; line-height: 1.35; }
+.pp-transport { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; height: 44px; flex: none;
+  padding: 0 12px; background: var(--pp-head); border-top: 1px solid #0f0f10; }
+.pp-tc { font-family: var(--mono, ui-monospace, "SF Mono", Menlo, monospace); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.pp-tc-now { color: var(--pp-accent); font-size: 14px; }
+.pp-tc-dur { justify-self: end; color: var(--pp-muted); font-size: 13px; }
+.pp-transport-btns { display: flex; align-items: center; gap: 4px; }
+.pp-tbtn, .pp-icon { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--pp-text-2); cursor: pointer; }
+.pp-tbtn:hover:not(:disabled), .pp-icon:hover:not(:disabled) { background: #333336; color: var(--pp-text); }
+.pp-tbtn:disabled, .pp-icon:disabled { opacity: .35; cursor: default; }
+.pp-play { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 50%; margin: 0 6px;
+  background: var(--pp-text); color: #111; cursor: pointer; }
+.pp-play:hover:not(:disabled) { background: #fff; }
+.pp-play:disabled { opacity: .5; cursor: default; }
+
+/* ---------------------------------------------------------------- save state */
+.pp-save { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--pp-muted); white-space: nowrap; }
+.pp-save-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.pp-save-saving .pp-save-dot { background: var(--pp-accent); animation: pp-pulse 1s ease-in-out infinite; }
+.pp-save-retrying, .pp-save-error { color: #f2a7a0; }
+.pp-save-retrying .pp-save-dot, .pp-save-error .pp-save-dot { background: var(--red); }
+@keyframes pp-pulse { 50% { opacity: .25; } }
+
+/* ---------------------------------------------------------------- effect controls (inspector) */
+.pp-empty p { margin: 0 0 6px; font-size: 13px; }
+.pp-subject { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.pp-chip { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; color: var(--pp-text); letter-spacing: .03em; }
+.pp-chip-video { background: var(--pp-video); }
+.pp-chip-voice, .pp-chip-audio { background: var(--pp-voice); }
+.pp-chip-music { background: var(--pp-music); }
+.pp-quote { margin: 0 0 10px; font-size: 14px; line-height: 1.45; color: var(--pp-text); }
+.pp-warn { margin: 0 0 6px; font-size: 12px; color: #ffc27a; }
+.pp-sec { border-top: 1px solid var(--pp-line); padding: 10px 0 6px; }
+.pp-sec-title { margin: 0 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--pp-muted); }
+.pp-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; }
+.pp-field-label { font-size: 13px; color: var(--pp-text-2); }
+.pp-field-input { display: inline-flex; align-items: center; gap: 6px; }
+.pp-field-input input { width: 76px; height: 26px; padding: 0 8px; border-radius: 5px; border: 1px solid #3a3a3d;
+  background: #161617; color: var(--pp-accent); font: 13px/1 var(--mono, ui-monospace, monospace); text-align: right; }
+.pp-field-input input:focus { outline: none; border-color: var(--pp-accent); }
+.pp-unit { font-size: 12px; color: var(--pp-muted); min-width: 18px; }
+.pp-check { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 13px; color: var(--pp-text-2); cursor: pointer; }
+.pp-note { margin: 4px 0 6px; font-size: 12px; line-height: 1.4; color: var(--pp-muted); }
+.pp-kv { display: flex; justify-content: space-between; font-size: 13px; color: var(--pp-text-2); min-height: 24px; align-items: center; }
+.pp-kv .mono { color: var(--pp-text); }
+.pp-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pp-btn { height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid #3a3a3d; background: #2c2c2f;
+  color: var(--pp-text); font: inherit; font-size: 12px; cursor: pointer; }
+.pp-btn:hover:not(:disabled) { background: #36363a; }
+.pp-btn:disabled { opacity: .4; cursor: default; }
+.pp-btn-danger:hover:not(:disabled) { background: var(--red); border-color: var(--red); color: #fff; }
+
+/* ---------------------------------------------------------------- timeline panel */
+.pp-timeline { flex: 1; min-height: 200px; }
+.pp-tl-head { gap: 14px; }
+.pp-tc-big { color: var(--pp-accent); font-size: 15px; }
+.pp-tl-actions { display: flex; align-items: center; gap: 4px; }
+.pp-sep { width: 1px; height: 18px; background: var(--pp-line); margin: 0 6px; }
+.pp-toggle, .pp-text-btn { height: 24px; padding: 0 9px; border-radius: 5px; border: 1px solid #3a3a3d; background: transparent;
+  color: var(--pp-text-2); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.pp-toggle.on { background: var(--pp-accent); border-color: var(--pp-accent); color: #0d1b2e; }
+.pp-text-btn:hover, .pp-toggle:hover:not(.on) { background: #333336; color: var(--pp-text); }
+.pp-zoom { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.pp-zoom input[type="range"] { width: 120px; accent-color: var(--pp-accent); }
+
+.pp-msgs { display: flex; flex-direction: column; gap: 1px; background: #0f0f10; }
+.pp-msg { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 12px; background: #3a3220; color: #ffd9a0; }
+.pp-msg-err { background: #3a2222; color: #f8b4ad; }
+.pp-msg span { flex: 1; }
+.pp-msg button { border: 0; background: none; color: inherit; font-size: 16px; cursor: pointer; }
+
+.pp-tl-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 38px var(--pp-head-w) minmax(0, 1fr); }
+.pp-tools { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 6px;
+  background: var(--pp-head); border-right: 1px solid #0f0f10; }
+.pp-tool { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--pp-text-2); cursor: pointer; }
+.pp-tool:hover { background: #333336; color: var(--pp-text); }
+.pp-tool.on { background: #2b3a52; color: var(--pp-accent); box-shadow: inset 0 0 0 1px var(--pp-accent); }
+
+.pp-headers { background: var(--pp-panel); border-right: 1px solid #0f0f10; overflow: hidden; }
+.pp-corner { height: var(--pp-ruler-h); border-bottom: 1px solid #0f0f10; background: var(--pp-head); }
+.pp-th { display: flex; align-items: center; gap: 8px; height: var(--pp-row-h); padding: 0 8px;
+  border-bottom: 1px solid #151516; font-size: 12px; }
+.pp-th.clickable { cursor: pointer; }
+.pp-th.clickable:hover { background: #2a2a2d; }
+.pp-th.sel { background: #2b3a52; }
+.pp-th-id { font-weight: 700; font-size: 11px; padding: 2px 5px; border-radius: 3px; background: #333336; color: var(--pp-text); }
+.pp-th-video .pp-th-id { background: var(--pp-video); }
+.pp-th-audio .pp-th-id { background: var(--pp-voice); }
+.pp-th-caption .pp-th-id { background: var(--pp-caption); }
+.pp-th-name { flex: 1; color: var(--pp-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-th-btn { min-width: 26px; height: 22px; padding: 0 5px; border-radius: 4px; border: 1px solid #3a3a3d; background: transparent;
+  color: var(--pp-muted); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.pp-th-btn.on { background: var(--pp-accent); border-color: var(--pp-accent); color: #0d1b2e; }
+
+.pp-scroll { overflow: auto; background: var(--pp-lane); position: relative; }
+.pp-lanes { position: relative; min-height: 100%; }
+.pp-ruler { position: sticky; top: 0; z-index: 4; height: var(--pp-ruler-h); background: var(--pp-head);
+  border-bottom: 1px solid #0f0f10; cursor: text; }
+.pp-tick { position: absolute; bottom: 0; width: 1px; height: 6px; background: #4a4a4e; }
+.pp-tick.major { height: 12px; background: #77777c; }
+.pp-tick-label { position: absolute; bottom: 12px; left: 4px; font: 11px var(--mono, ui-monospace, monospace);
+  color: var(--pp-muted); white-space: nowrap; }
+.pp-ruler-end { position: absolute; top: 0; bottom: 0; width: 2px; background: #5a5a5f; }
+
+.pp-lane { position: relative; height: var(--pp-row-h); border-bottom: 1px solid #151516; }
+.pp-lane:nth-of-type(even) { background: var(--pp-lane-alt); }
+.pp-lane.muted { opacity: .5; }
+.pp-lane-note { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--pp-muted); }
+
+.pp-playhead { position: absolute; top: 0; bottom: 0; width: 1px; margin-left: -0.5px; background: var(--pp-accent);
+  z-index: 6; pointer-events: none; box-shadow: 0 0 0 .5px rgba(158, 195, 245, .35); }
+.pp-playhead-cap { position: absolute; top: 0; left: -7px; width: 15px; height: 18px; pointer-events: auto; cursor: ew-resize;
+  background: var(--pp-accent); clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%); touch-action: none; }
+
+/* ---------------------------------------------------------------- clips */
+.pp-clip { position: absolute; top: 3px; height: calc(var(--pp-row-h) - 7px); border-radius: 4px; overflow: hidden;
+  display: flex; align-items: flex-start; padding: 4px 8px; font-size: 12px; line-height: 1.25; color: var(--pp-text);
+  cursor: grab; touch-action: none; border: 1px solid rgba(255, 255, 255, .12); box-sizing: border-box; }
+.pp-clip:active { cursor: grabbing; }
+.pp-clip.sel { border-color: #fff; box-shadow: 0 0 0 1px #fff; z-index: 2; }
+.pp-clip-name { position: relative; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 500; pointer-events: none; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); }
+.pp-clip-video { background: var(--pp-video); }
+.pp-clip-voice { background: var(--pp-voice); }
+.pp-clip-voice.flagged { background: var(--pp-flag); }
+.pp-clip-voice.muted { opacity: .45; }
+.pp-clip-music { background: var(--pp-music); }
+.pp-clip-orig { background: var(--pp-orig); cursor: pointer; }
+.pp-clip-caption { background: var(--pp-caption); cursor: pointer; }
+.pp-flag { color: #ffd08a; }
+.pp-fade { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.pp-fade.in { left: 0; background: linear-gradient(to top right, rgba(0, 0, 0, .45) 50%, transparent 50%); }
+.pp-fade.out { right: 0; background: linear-gradient(to top left, rgba(0, 0, 0, .45) 50%, transparent 50%); }
+.pp-handle { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 1; }
+.pp-handle.in { left: 0; } .pp-handle.out { right: 0; }
+.pp-clip-video:hover .pp-handle { background: rgba(255, 255, 255, .16); }
+.pp-clip-actions { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; gap: 3px; z-index: 2; }
+.pp-clip-actions button { min-width: 22px; height: 22px; border: 0; border-radius: 4px; background: rgba(0, 0, 0, .45);
+  color: #fff; font-size: 11px; cursor: pointer; }
+.pp-clip-actions button:hover { background: rgba(0, 0, 0, .7); }
+
+/* Razor tool: a cut cursor over clips. */
+.pp-razor .pp-clip, .pp-razor .pp-clip * { cursor: crosshair; }
+
+/* ---------------------------------------------------------------- status bar */
+.pp-status { display: flex; align-items: center; gap: 16px; height: 26px; flex: none; padding: 0 12px;
+  background: var(--pp-head); border-top: 1px solid #0f0f10; font-size: 11.5px; color: var(--pp-muted); overflow: hidden; white-space: nowrap; }
+.pp-status-warn { color: #ffc27a; overflow: hidden; text-overflow: ellipsis; }
+.pp-keys { margin-left: auto; }
+
+/* Keyboard focus stays visible inside the dark workspace (desktop quality floor). */
+.pp button:focus-visible, .pp input:focus-visible, .pp [tabindex]:focus-visible { outline: 2px solid var(--pp-accent); outline-offset: 1px; }
+
+@media (max-width: 1000px) {
+  .pp { height: auto; }
+  .pp-top { grid-template-columns: 1fr; height: auto !important; }
+  .pp-monitor { aspect-ratio: 16 / 9; }
+  .pp-controls { max-height: 320px; }
+  .pp-timeline { min-height: 360px; }
+  .pp-keys { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .pp-save-saving .pp-save-dot { animation: none; } }
+
+/* ---------------------------------------------------------------- project header: tabs share the title row */
+.ed-page .ed-head { padding: 14px 0 12px; }
+.ed-page .ed-head-row { align-items: center; margin-top: 4px; }
+.ed-page .ed-title { font-size: 22px; }
+.ed-page .ed-meta { margin-top: 2px; font-size: 13px; }
+.ed-tabs { margin: 0 !important; border-bottom: 0 !important; background: var(--surface); border-radius: 9px; padding: 3px; gap: 2px; }
+.ed-tabs .editor-tab { padding: 6px 16px; border-radius: 7px; border-bottom: 0; font-size: 14px; }
+.ed-tabs .editor-tab.on { background: var(--surface-3); color: var(--text); }
+.ed-tabs .editor-tab:not(.on):hover { color: var(--text); }
+
+/* Full-width pages (project editor): the nav uses the page's own gutter so the logo lines up. */
+.nav-wide .nav-inner { max-width: none; padding-left: clamp(16px, 3vw, 40px); padding-right: clamp(16px, 3vw, 40px); }
+
+/* Export list: one text size per row; actions as small buttons. */
+.export-row { font-size: 14px; gap: 12px; }
+.export-row .mono { font-size: 14px; }
+
+/* ================================================================ Export tab: settings card + exports list */
+.xp { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .xp { grid-template-columns: 1fr; } }
+.xp-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; overflow: hidden; }
+.xp-card-head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--hairline); }
+.xp-card-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.xp-count { font-size: 12px; color: var(--text-3); padding: 1px 8px; border-radius: 999px; background: var(--surface-3); }
+
+.xp-rows { padding: 6px 20px; }
+.xp-row { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; align-items: start; padding: 14px 0; }
+.xp-row + .xp-row { border-top: 1px solid var(--hairline); }
+.xp-row-label { font-size: 14px; font-weight: 500; color: var(--text-2); padding-top: 8px; }
+.xp-row-control { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.xp-row-hint { font-size: 13px; color: var(--text-3); }
+@media (max-width: 560px) { .xp-row { grid-template-columns: 1fr; gap: 8px; } .xp-row-label { padding-top: 0; } }
+
+.xp-seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-2);
+  border: 1px solid var(--hairline); }
+.xp-seg button { min-width: 64px; height: 32px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--text-2); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+.xp-seg button:hover:not(.on) { color: var(--text); background: rgba(246, 241, 231, .05); }
+.xp-seg button.on { background: var(--text); color: #111; }
+
+.xp-err { margin: 0 20px 12px; }
+.xp-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px;
+  border-top: 1px solid var(--hairline); background: rgba(246, 241, 231, .02); }
+.xp-summary { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.xp-summary-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+.xp-summary-value { font-size: 15px; font-weight: 500; }
+.xp-summary-note { font-size: 13px; color: var(--orange); }
+
+.xp-empty { padding: 28px 20px; }
+.xp-empty p { margin: 0 0 4px; font-size: 14px; }
+.xp-list { list-style: none; margin: 0; padding: 0; }
+.xp-item { padding: 14px 20px; display: flex; flex-direction: column; gap: 8px; }
+.xp-item + .xp-item { border-top: 1px solid var(--hairline); }
+.xp-item-main { display: flex; align-items: center; gap: 14px; }
+.xp-n { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; min-width: 24px; }
+.xp-item-id { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.xp-item-title { font-size: 15px; font-weight: 600; }
+.xp-item-meta { font-size: 13px; color: var(--text-3); }
+.xp-item-side { display: flex; align-items: center; gap: 8px; flex: none; }
+.xp-progress { display: inline-flex; align-items: center; gap: 10px; }
+.xp-progress-bar { width: 140px; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.xp-progress-bar span { display: block; height: 100%; background: var(--blue); transition: width .4s var(--ease); }
+.xp-progress-n { font-size: 13px; color: var(--text-2); min-width: 50px; text-align: right; }
+.xp-pill { font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; }
+.xp-pill-failed { background: rgba(255, 69, 58, .14); color: #f2a7a0; }
+.xp-item-error { margin: 0 0 0 38px; font-size: 13px; color: #f2a7a0; }
+.xp-warn { align-self: flex-start; margin-left: 38px; }
+.xp .export-warn-list { margin-left: 38px; }
+
+/* ================================================================ Premiere-density pass
+   Thin panel chrome, near-zero padding round the frame, 30 px tracks with full-height clips,
+   11–12 px labels (macOS minimum 10 pt, typography.md). Overrides the roomier values above. */
+.pp { --pp-ruler-h: 22px; --pp-row-h: 30px; --pp-head-w: 118px; --pp-app: #0e0e0f;
+  border-radius: 6px; font-size: 12px; height: max(600px, calc(100vh - var(--nav-h) - 116px)); }
+.pp-top { grid-template-columns: 280px minmax(0, 1fr); gap: 3px; height: 64%; max-height: 72vh; }
+.pp-panel { border-radius: 4px; }
+.pp-timeline { margin-top: 0; }
+.pp-head { height: 26px; padding: 0 8px; gap: 8px; }
+.pp-tab { font-size: 11.5px; }
+.pp-body { padding: 8px 10px; }
+.pp-splitter { height: 4px; }
+.pp-splitter::after { top: 1px; }
+
+/* Program monitor: the frame fills the panel, a few px of dark round it. */
+.pp-monitor { padding: 4px; }
+.pp-transport { height: 34px; padding: 0 10px; }
+.pp-tc-now { font-size: 13px; }
+.pp-tc-dur { font-size: 12px; }
+.pp-tbtn { width: 26px; height: 26px; }
+.pp-play { width: 30px; height: 30px; margin: 0 4px; }
+.pp-play svg { width: 15px; height: 15px; }
+
+/* Timeline header row */
+.pp-tl-head { height: 28px; gap: 10px; }
+.pp-tc-big { font-size: 14px; }
+.pp-icon { width: 24px; height: 24px; }
+.pp-toggle, .pp-text-btn { height: 20px; padding: 0 7px; font-size: 11px; border-radius: 4px; }
+.pp-zoom input[type="range"] { width: 96px; }
+
+/* Tool strip + track headers */
+.pp-tl-body { grid-template-columns: 30px var(--pp-head-w) minmax(0, 1fr); }
+.pp-tools { gap: 2px; padding-top: 4px; }
+.pp-tool { width: 24px; height: 24px; border-radius: 4px; }
+.pp-tool svg { width: 15px; height: 15px; }
+.pp-th { gap: 6px; padding: 0 6px; font-size: 11px; border-bottom-color: #121213; }
+.pp-th-id { font-size: 10px; padding: 1px 4px; border-radius: 2px; }
+.pp-th-btn { min-width: 20px; height: 17px; padding: 0 4px; font-size: 10px; border-radius: 3px; }
+
+/* Ruler + lanes + clips: clips fill the row (1 px inset), label on one line. */
+.pp-tick.major { height: 9px; }
+.pp-tick { height: 4px; }
+.pp-tick-label { bottom: 8px; left: 3px; font-size: 10px; }
+.pp-lane { border-bottom-color: #121213; }
+.pp-clip { top: 1px; height: calc(var(--pp-row-h) - 3px); padding: 2px 6px; font-size: 11px; line-height: 1.2;
+  border-radius: 2px; border-color: rgba(255, 255, 255, .1); align-items: center; }
+.pp-clip.sel { box-shadow: 0 0 0 1px #fff; }
+.pp-clip-name { font-weight: 500; }
+.pp-handle { width: 6px; }
+.pp-clip-actions { right: 8px; }
+.pp-clip-actions button { min-width: 18px; height: 18px; font-size: 10px; border-radius: 3px; }
+.pp-playhead-cap { width: 13px; left: -6px; height: 14px; }
+.pp-lane-note { font-size: 11px; }
+
+/* Effect Controls: compact rows */
+.pp-subject { font-size: 12px; margin-bottom: 6px; }
+.pp-quote { font-size: 13px; margin-bottom: 8px; }
+.pp-sec { padding: 8px 0 4px; }
+.pp-sec-title { font-size: 10.5px; margin-bottom: 6px; }
+.pp-field { min-height: 26px; }
+.pp-field-label, .pp-check, .pp-kv { font-size: 12px; }
+.pp-field-input input { width: 68px; height: 22px; font-size: 12px; border-radius: 3px; }
+.pp-check { min-height: 24px; }
+.pp-btn { height: 24px; padding: 0 10px; font-size: 11.5px; border-radius: 4px; }
+.pp-note { font-size: 11.5px; }
+
+/* Status bar */
+.pp-status { height: 22px; font-size: 11px; }
+
+/* Project header above the workspace: tighter so the workspace gets the height. */
+.ed-page .ed-head { padding: 8px 0 8px; }
+.ed-page .ed-title { font-size: 20px; }
+.ed-page .ed-meta { font-size: 12.5px; }
+.ed-tabs .editor-tab { padding: 5px 14px; font-size: 13px; }
+
+@media (max-width: 1000px) { .pp-top { height: auto !important; max-height: none; } }
+
+/* ================================================================ Timeline tab = fixed app screen
+   The page is exactly the viewport (dvh follows browser zoom and mobile toolbars); the workspace
+   takes the height left under the header. Nothing scrolls except the timeline lanes inside it. */
+body.app-fixed { overflow: hidden; }
+body.app-fixed .footer { display: none; }
+.ed-page.ed-page-fixed { height: calc(100vh - var(--nav-h)); height: calc(100dvh - var(--nav-h));
+  display: flex; flex-direction: column; overflow: hidden; padding-bottom: 8px; }
+.ed-page-fixed > * { flex: none; }
+.ed-page-fixed > .ed-sec:last-child { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-top: 0; }
+.ed-page-fixed .pp { flex: 1; min-height: 0; height: auto; }
+.ed-page-fixed .pp-top { height: 62%; max-height: none; min-height: 160px; }
+.ed-page-fixed .pp-timeline { min-height: 120px; }
+.ed-page-fixed .pp-top { max-height: calc(100% - 230px); }   /* the timeline always keeps room for all five tracks */
+
+/* ================================================================ collapsible chrome + adaptive tracks */
+.ed-head-right { display: flex; align-items: center; gap: 8px; }
+.ed-collapse { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--hairline);
+  background: var(--surface); color: var(--text-2); cursor: pointer; flex: none; }
+.ed-collapse:hover { color: var(--text); background: var(--surface-2); }
+.ed-head-compact { display: flex; align-items: center; gap: 10px; padding: 6px 0 !important; min-height: 40px; }
+.ed-back-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; }
+.ed-back-icon:hover { background: var(--surface-2); }
+.ed-compact-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+.ed-head-compact .ed-tabs { padding: 2px; border-radius: 7px; }
+.ed-head-compact .ed-tabs .editor-tab { padding: 3px 12px; font-size: 12.5px; border-radius: 5px; }
+.ed-head-compact .ed-collapse { width: 26px; height: 26px; }
+/* Collapsed: no site nav, the editor takes the whole window. */
+body.editor-compact .nav { display: none; }
+body.editor-compact .ed-page.ed-page-fixed { height: 100vh; height: 100dvh; }
+
+/* Tracks shrink to fit; at small heights the clip label gets a little smaller. */
+.pp-scroll { overflow-x: auto; overflow-y: hidden; }
+.pp-rows-tight .pp-clip { padding: 0 5px; font-size: 10.5px; }
+.pp-rows-tight .pp-th { font-size: 10.5px; }
+.pp-rows-tight .pp-th-btn { height: 15px; font-size: 9.5px; }
+/* More picture: the timeline keeps just enough for 5 × 26 px tracks (rows shrink further if needed). */
+.ed-page-fixed .pp-top { height: 68%; max-height: calc(100% - 200px); }
+
+/* Until the divider is dragged: the timeline is exactly tall enough for its five tracks
+   (header 28 + ruler 22 + 5 × 26 + scrollbar 16 + status 22) and the monitor gets the rest. */
+.ed-page-fixed .pp-auto .pp-top { flex: 1; height: auto; max-height: none; }
+.ed-page-fixed .pp-auto .pp-timeline { flex: none; height: 218px; min-height: 0; }
+
+/* ================================================================ Chunks tab: one compact row per chunk
+   (selectors carry .editor-chunks / .ed-page so they win over the older card styles in styles.css) */
+.ed-page .editor-chunks { gap: 0; }
+.ed-page .editor-chunks-head { padding: 0 2px 8px; font-size: 13px; }
+.editor-chunks .ck { margin: 0; padding: 7px 14px; border: 1px solid var(--hairline); border-radius: 0; background: var(--surface); }
+.editor-chunks .ck + .ck { border-top: 0; }
+.editor-chunks .ck:first-of-type { border-radius: 12px 12px 0 0; }
+.editor-chunks .ck:last-child { border-radius: 0 0 12px 12px; }
+.editor-chunks .ck:only-of-type { border-radius: 12px; }
+.editor-chunks .ck:hover { background: #1b1b1d; }
+.editor-chunks .ck.chunk-failed { box-shadow: inset 3px 0 0 var(--red); border-color: var(--hairline); }
+.ck-row { display: grid; grid-template-columns: 22px 160px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 38px; }
+.ck-idx { font-size: 13px; color: var(--text-3); text-align: right; }
+.ck-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.ck-text { min-width: 0; }
+.editor-chunks .ck .editor-chunk-text { margin: 0; font-size: 14.5px; line-height: 1.4; }
+.editor-chunks .ck .editor-chunk-source { margin: 1px 0 0; font-size: 12px; line-height: 1.35; }
+.ck-editing-label { color: var(--text-3); font-size: 13px !important; }
+.ck-side { display: flex; align-items: center; gap: 8px; }
+.editor-chunks .ck .ap { padding: 3px 10px 3px 3px; width: 210px; max-width: 210px; gap: 8px; }
+.editor-chunks .ck .ap-btn { width: 24px; height: 24px; }
+.editor-chunks .ck .ap-btn svg { width: 11px; height: 11px; }
+.editor-chunks .ck .ap-time { min-width: 40px; font-size: 11px; }
+.editor-chunks .ck .chunk-wait { margin: 0; font-size: 12px; }
+.editor-chunks .ck .editor-chunk-edit { margin: 8px 0 4px 34px; }
+.editor-chunks .ck .chunk-err { margin: 4px 0 0 34px; }
+@media (max-width: 900px) {
+  .ck-row { grid-template-columns: 22px minmax(0, 1fr); }
+  .ck-meta, .ck-text, .ck-side { grid-column: 2; }
+}
+/* Voice card: one slim row */
+.ed-page .vp { margin-bottom: 12px; }
+.ed-page .vp-current { padding: 8px 10px 8px 12px; gap: 12px; max-width: 440px; }
+.ed-page .vp-avatar { width: 32px; height: 32px; font-size: 13px; }
+.ed-page .vp-id { flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ed-page .vp-label { font-size: 11px; }
+.ed-page .vp-name { font-size: 14px; }
+.ed-page .vp-current .btn { height: 30px; padding: 0 14px; font-size: 13px; }

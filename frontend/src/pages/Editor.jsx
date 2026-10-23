@@ -37,6 +37,24 @@ export default function EditorProject() {
   const [error, setError] = useState(null);
   const [sseOk, setSseOk] = useState(true);
   const [tab, setTab] = useState("chunks");
+  // The Timeline tab is a fixed app screen: exactly the window's height, no page scroll, no footer.
+  const fixed = tab === "timeline" && data?.project?.status !== "awaiting_narration";
+  useEffect(() => {
+    document.body.classList.toggle("app-fixed", fixed);
+    return () => document.body.classList.remove("app-fixed");
+  }, [fixed]);
+  // Collapsed chrome (Timeline tab only): the site nav and project header fold into one slim row.
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("vani.editor.collapsed") === "1"; } catch { return false; }
+  });
+  const compact = fixed && collapsed;
+  useEffect(() => {
+    try { localStorage.setItem("vani.editor.collapsed", collapsed ? "1" : "0"); } catch { /* optional */ }
+  }, [collapsed]);
+  useEffect(() => {
+    document.body.classList.toggle("editor-compact", compact);
+    return () => document.body.classList.remove("editor-compact");
+  }, [compact]);
 
   // Fetch once, then let SSE drive updates.
   useEffect(() => {
@@ -47,14 +65,20 @@ export default function EditorProject() {
     return () => { cancelled = true; };
   }, [id]);
 
-  // SSE subscription — reconnects automatically.
+  // SSE subscription — reconnects automatically. A drop is only reported if it lasts 4 s,
+  // so routine reconnects don't flash a warning.
   useEffect(() => {
+    let downTimer = null;
     const unsub = editor.subscribe(id, {
       onSnapshot(snap) { setData(snap); },
       onError(e) { setError(e.message || "Live update error."); },
-      onConnection: setSseOk,
+      onConnection(ok) {
+        clearTimeout(downTimer);
+        if (ok) setSseOk(true);
+        else downTimer = setTimeout(() => setSseOk(false), 4000);
+      },
     });
-    return unsub;
+    return () => { clearTimeout(downTimer); unsub(); };
   }, [id]);
 
   if (error && !data) {
@@ -74,8 +98,17 @@ export default function EditorProject() {
   const { project, chunks } = data;
 
   return (
-    <div className="ed-page">
-      <ProjectHeader project={project} />
+    <div className={`ed-page ${fixed ? "ed-page-fixed" : ""}`}>
+      <ProjectHeader project={project} compact={compact}
+                     collapse={fixed ? { collapsed, toggle: () => setCollapsed((c) => !c) } : null}
+                     tabs={project.status === "awaiting_narration" ? null : (
+        <div className="editor-tabs ed-tabs" role="tablist" aria-label="Project views">
+          {[["chunks", "Chunks"], ["timeline", "Timeline"], ["export", "Export"]].map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={tab === k} className={`editor-tab ${tab === k ? "on" : ""}`}
+                    onClick={() => setTab(k)}>{label}</button>
+          ))}
+        </div>
+      )} />
       {!sseOk && (
         <section className="ed-sec" style={{ paddingTop: 0, paddingBottom: 0 }}>
           <div className="banner warn" role="status"><span className="banner-dot" /><span>Live updates paused — reconnecting…</span></div>
@@ -103,12 +136,6 @@ export default function EditorProject() {
           <NarrationTake project={project} />
         ) : (
           <>
-            <div className="editor-tabs" role="tablist">
-              {[["chunks", "Chunks"], ["timeline", "Timeline"], ["export", "Export"]].map(([k, label]) => (
-                <button key={k} role="tab" aria-selected={tab === k} className={`editor-tab ${tab === k ? "on" : ""}`}
-                        onClick={() => setTab(k)}>{label}</button>
-              ))}
-            </div>
             {tab === "chunks" && <><VoicePicker project={project} /><ChunkList project={project} chunks={chunks} /></>}
             {tab === "timeline" && <TimelineEditor project={project} chunks={chunks} />}
             {tab === "export" && <ExportPanel project={project} chunks={chunks} />}
@@ -121,8 +148,34 @@ export default function EditorProject() {
 
 // ─────────────────────────────────── Header ───────────────────────────────────
 
-function ProjectHeader({ project }) {
+function CollapseButton({ collapse }) {
+  if (!collapse) return null;
+  const label = collapse.collapsed ? "Show the header" : "Hide the header for more editing space";
+  return (
+    <button className="ed-collapse" onClick={collapse.toggle} aria-label={label} title={label} aria-pressed={collapse.collapsed}>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {collapse.collapsed ? <path d="M6 9l6 6 6-6" /> : <path d="M6 15l6-6 6 6" />}
+      </svg>
+    </button>
+  );
+}
+
+function ProjectHeader({ project, tabs, compact, collapse }) {
   const KIND = { video_audio: "Dub of the video's audio", script: "Script voice-over", narration: "Narration" };
+  if (compact) {
+    return (
+      <header className="ed-head ed-head-compact">
+        <Link to="/projects" className="ed-back ed-back-icon" aria-label="Back to projects" title="Projects">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+        </Link>
+        <span className="ed-compact-title" title={project.name}>{project.name}</span>
+        <span className={`status-pill status-${project.status}`}>{STATUS_LABEL[project.status] || project.status}</span>
+        <span style={{ flex: 1 }} />
+        {tabs}
+        <CollapseButton collapse={collapse} />
+      </header>
+    );
+  }
   return (
     <header className="ed-head">
       <Link to="/projects" className="ed-back">
@@ -141,6 +194,10 @@ function ProjectHeader({ project }) {
             <span>{project.src_lang === project.tgt_lang ? langName(project.tgt_lang) : `${langName(project.src_lang)} → ${langName(project.tgt_lang)}`}</span>
             {project.duration_s != null && <><span className="pj-sep" aria-hidden="true" /><span className="mono">{clock(project.duration_s)}</span></>}
           </div>
+        </div>
+        <div className="ed-head-right">
+          {tabs}
+          <CollapseButton collapse={collapse} />
         </div>
       </div>
     </header>
@@ -288,31 +345,48 @@ function ChunkRow({ chunk, project }) {
     setBusy(false);
   }
 
+  const meta = (
+    <>
+      <span className={`chunk-pill ${st.cls}`}>{st.label}</span>
+      {chunk.anchor_src_s != null && (
+        <span className="mono chunk-time">
+          {clock(Number(chunk.anchor_src_s))}–{clock(Number(chunk.anchor_src_s) + Number(chunk.anchor_len_s))}
+        </span>
+      )}
+      {chunk.emotion_tag && chunk.emotion_tag !== "neutral" && <span className="chunk-tag">{chunk.emotion_tag}</span>}
+      {Number(chunk.speed) !== 1 && <span className="chunk-tag mono">{Number(chunk.speed).toFixed(2)}×</span>}
+      {chunk.overflow && <span className="editor-chunk-overflow" title="Placed past the end of the video">Past video end</span>}
+    </>
+  );
   return (
-    <div className={`editor-chunk ${st.cls}`}>
-      <div className="editor-chunk-head">
-        <span className="editor-chunk-idx mono">{chunk.idx + 1}</span>
-        <span className={`chunk-pill ${st.cls}`}>{st.label}</span>
-        {chunk.anchor_src_s != null && (
-          <span className="mono chunk-time">
-            {clock(Number(chunk.anchor_src_s))} – {clock(Number(chunk.anchor_src_s) + Number(chunk.anchor_len_s))}
-          </span>
-        )}
-        {chunk.emotion_tag && chunk.emotion_tag !== "neutral" && <span className="chunk-tag">{chunk.emotion_tag}</span>}
-        {Number(chunk.speed) !== 1 && <span className="chunk-tag mono">{Number(chunk.speed).toFixed(2)}×</span>}
-        {chunk.overflow && <span className="editor-chunk-overflow" title="Placed past the end of the video">Past video end</span>}
-        <span style={{ flex: 1 }} />
-        {chunk.status === "failed" && (
-          <button className="btn btn-quiet btn-xs" onClick={regen} disabled={busy}>Retry</button>
-        )}
-        <button className="btn btn-quiet btn-xs" onClick={() => setEditing((e) => !e)} disabled={busy}>
-          {editing ? "Cancel" : "Edit"}
-        </button>
+    <div className={`editor-chunk ck ${st.cls} ${editing ? "ck-editing" : ""}`}>
+      {/* One compact row: number · status/time · text (+ original) · player · edit */}
+      <div className="ck-row">
+        <span className="ck-idx mono">{chunk.idx + 1}</span>
+        <div className="ck-meta">{meta}</div>
+        <div className="ck-text">
+          {!editing && <p className="editor-chunk-text">{chunk.text}</p>}
+          {!editing && chunk.source_text !== chunk.text && <p className="editor-chunk-source">Original: {chunk.source_text}</p>}
+          {editing && <p className="editor-chunk-text ck-editing-label">Editing chunk {chunk.idx + 1}</p>}
+        </div>
+        <div className="ck-side">
+          {chunk.status === "ready" && chunk.has_audio && !editing && (
+            <AudioPlayer key={chunk.revision} label={`Chunk ${chunk.idx + 1}`} compact
+                         src={() => editor.chunkAudioUrl(project.id, chunk.id).then((r) => r.url)} onError={setErr} />
+          )}
+          {(chunk.status === "pending" || chunk.status === "generating") && (
+            <span className="chunk-wait"><span className="ap-spin" /> Generating…</span>
+          )}
+          {chunk.status === "failed" && (
+            <button className="btn btn-quiet btn-xs" onClick={regen} disabled={busy}>Retry</button>
+          )}
+          <button className="btn btn-quiet btn-xs" onClick={() => setEditing((e) => !e)} disabled={busy}>
+            {editing ? "Cancel" : "Edit"}
+          </button>
+        </div>
       </div>
 
-      {!editing ? (
-        <p className="editor-chunk-text">{chunk.text}</p>
-      ) : (
+      {editing && (
         <div className="editor-chunk-edit">
           <textarea className="input" rows={3} value={text} onChange={(e) => setText(e.target.value)}
                     disabled={busy} style={{ resize: "vertical" }} aria-label="Chunk text" />
@@ -335,20 +409,8 @@ function ChunkRow({ chunk, project }) {
         </div>
       )}
 
-      {chunk.status === "ready" && chunk.has_audio && !editing && (
-        <AudioPlayer key={chunk.revision} label={`Chunk ${chunk.idx + 1}`} compact
-                     src={() => editor.chunkAudioUrl(project.id, chunk.id).then((r) => r.url)} onError={setErr} />
-      )}
-      {(chunk.status === "pending" || chunk.status === "generating") && (
-        <p className="chunk-wait"><span className="ap-spin" /> Generating voice…</p>
-      )}
-
       {chunk.error_message && <p className="chunk-err" role="alert">{chunk.error_message}</p>}
       {err && <p className="chunk-err" role="alert">{err}</p>}
-
-      {!editing && chunk.source_text !== chunk.text && (
-        <p className="editor-chunk-source">Original: {chunk.source_text}</p>
-      )}
     </div>
   );
 }

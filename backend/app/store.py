@@ -13,9 +13,11 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import os
 import sqlite3
 import threading
 import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -65,7 +67,10 @@ def _sqlite_list(user_id: str | None) -> list[dict]:
 
 # ---------------------------------------------------------------- projects: Supabase
 
-_mem: dict[str, dict] = {}          # newest document per project (read-through cache)
+# Newest document per project (read-through cache). Bounded LRU: without a cap every project ever
+# opened stayed in RAM until restart. Unflushed documents (in _dirty) are never evicted.
+MEM_CACHE_MAX = int(os.getenv("VANI_MEM_CACHE_MAX", "256"))
+_mem: "OrderedDict[str, dict]" = OrderedDict()
 _dirty: dict[str, dict] = {}        # waiting to be flushed
 _flush_cv = threading.Condition()
 
@@ -99,24 +104,38 @@ def _flusher() -> None:
         time.sleep(0.5)
 
 
+def _remember(job_id: str, doc: dict) -> None:
+    """Insert/refresh in the LRU cache, then evict the oldest clean entries over the cap.
+    Caller holds _flush_cv."""
+    _mem[job_id] = doc
+    _mem.move_to_end(job_id)
+    if len(_mem) > MEM_CACHE_MAX:
+        for k in [k for k in _mem if k not in _dirty][: len(_mem) - MEM_CACHE_MAX]:
+            del _mem[k]
+
+
 def _supa_save(job: dict) -> None:
     doc = copy.deepcopy(job)
     with _flush_cv:
-        _mem[job["id"]] = doc
+        _remember(job["id"], doc)
         _dirty[job["id"]] = doc
         _flush_cv.notify()
 
 
 def _supa_load(job_id: str) -> dict | None:
-    if job_id in _mem:
-        return copy.deepcopy(_mem[job_id])
+    with _flush_cv:
+        if job_id in _mem:
+            _mem.move_to_end(job_id)
+            return copy.deepcopy(_mem[job_id])
     from . import supa
     r = supa.admin().table("projects").select("data").eq("id", job_id).limit(1).execute()
     if not r.data:
         return None
     doc = r.data[0]["data"]
-    _mem[job_id] = doc
-    return copy.deepcopy(doc)
+    with _flush_cv:
+        if job_id not in _mem:          # a concurrent save may have put a newer one there
+            _remember(job_id, doc)
+        return copy.deepcopy(_mem[job_id])
 
 
 def _supa_list(user_id: str | None) -> list[dict]:

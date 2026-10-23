@@ -126,7 +126,8 @@ export async function refreshLibrary({ force = false } = {}) {
  * "file" part, the publishable key as apikey, the user's JWT as Authorization, and the
  * upload token only in the URL query string. A POST here would hit the *create-sign*
  * endpoint instead and silently store nothing. */
-export function uploadToStorage(file, uploadUrl, onProgress) {
+export function uploadToStorage(file, uploadUrl, onProgress, method = "supabase-put") {
+  if (method === "s3-put") return uploadToS3(file, uploadUrl, onProgress);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", uploadUrl);
@@ -157,6 +158,27 @@ export function uploadToStorage(file, uploadUrl, onProgress) {
     xhr.timeout = 600000; // never hang silently — fail with a clear message instead
     xhr.ontimeout = () => reject(new Error("Storage upload timed out. Check your connection and try again."));
     xhr.send(form);
+  });
+}
+
+/** S3 presigned PUT: the raw file as the body, its own content type, no auth headers (the
+ *  signature is in the URL). Needs a CORS rule on the bucket allowing PUT from this origin. */
+function uploadToS3(file, uploadUrl, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => {
+      if (xhr.status < 300) return resolve();
+      const msg = /<Message>([^<]+)<\/Message>/.exec(xhr.responseText || "")?.[1];
+      reject(new Error(msg ? `Storage upload failed: ${msg}` : `Storage upload failed (${xhr.status}).`));
+    };
+    // A CORS rejection surfaces as a bare network error with status 0.
+    xhr.onerror = () => reject(new Error("Storage upload failed. Check your connection; if it persists, the bucket's CORS rule may not allow this site."));
+    xhr.timeout = 600000;
+    xhr.ontimeout = () => reject(new Error("Storage upload timed out. Check your connection and try again."));
+    xhr.send(file);
   });
 }
 
@@ -226,7 +248,7 @@ export async function addVideos(files, onProgress) {
     URL.revokeObjectURL(probeUrl);
     try {
       onProgress?.(f.name, "upload", 0);
-      await uploadToStorage(f, init.uploadUrl, (frac) => onProgress?.(f.name, "upload", frac));
+      await uploadToStorage(f, init.uploadUrl, (frac) => onProgress?.(f.name, "upload", frac), init.uploadMethod);
       onProgress?.(f.name, "finalize");
       const a = await api.completeUpload(init.assetId);
       const item = fromAsset(a);

@@ -51,6 +51,35 @@ video ─► extract audio ─► Prisma v2.5 Batch STT ─► detect each line'
 
 ## Setup and running
 
+### File storage: AWS S3
+
+Tables live in Supabase; every file (uploaded videos, thumbnails, preview proxies, voice audio,
+music, exports) lives in S3 when `S3_BUCKET` is set, otherwise in the Supabase `media` bucket.
+Keys are the same in both, so the database doesn't change.
+
+`.env`:
+```
+S3_BUCKET=vaani-video-store
+AWS_REGION=ap-south-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+No spaces around `=` (Docker's `env_file` would read them as part of the name). The IAM user needs
+`s3:ListBucket` on the bucket and `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on its objects.
+
+The browser uploads to and plays from the bucket directly, so the bucket needs a CORS rule.
+Edit the origins in `scripts/s3-cors.json` to your site's address, then once:
+```
+.venv\Scripts\python scripts\set_s3_cors.py
+```
+(or in the S3 console: bucket → Permissions → Cross-origin resource sharing → paste the `CORSRules` array.)
+
+Moving existing files from the Supabase bucket (dry run first, then copy; safe to re-run):
+```
+.venv\Scripts\python scripts\migrate_storage_to_s3.py
+.venv\Scripts\python scripts\migrate_storage_to_s3.py --copy
+```
+
 ### Everything at once (Docker)
 
 Needs Docker Desktop running. Postgres, Auth and Storage stay on Supabase; Docker runs the
@@ -173,6 +202,65 @@ Tests (the DB tests need a throwaway Postgres; they wipe it):
 .venv\Scripts\python -m pytest editor_service\tests
 set DATABASE_URL_TEST=postgresql://postgres@127.0.0.1:5432/vani_test
 .venv\Scripts\python -m pytest editor_service\tests
+```
+
+## Limits and rate limiting
+
+All app-side limits are in **`config/limits.toml`**: the shared Gnani/Gemini budgets (calls per
+minute for the whole app, split fairly between the users active at that moment), projects per
+user, how many projects one user may generate at once (fewer when Vani is busy), queued exports,
+and upload size, count, length and storage. Edit it and restart; no rebuild. An environment variable
+named in the file's `[brackets]` overrides the value.
+
+Per-IP request limits are at the top of `frontend/nginx.conf`: 20 requests/s for the API,
+10/minute for sign-in, 2/s for upload and export starts. Over the limit returns 429.
+
+## Deploying to AWS (EC2, GitHub Actions)
+
+One server runs everything with Docker; only nginx is exposed, on port 80. Tables stay in
+Supabase and files in S3. Every push to `main` is tested and, if green, deployed.
+
+**1. Server (once).** Security group: inbound 22 (SSH) and 80 (HTTP) only. Then from your machine:
+```
+scp -i your-key.pem scripts/server-setup.sh ubuntu@SERVER_IP:~
+ssh -i your-key.pem ubuntu@SERVER_IP "bash server-setup.sh"
+```
+It installs Docker, adds 4 GB swap, turns on the firewall (22 + 80) and automatic security updates,
+and creates `/opt/vani`.
+
+**2. Secrets on the server (once).** Copy your `.env` up, then add these lines to it on the server:
+```
+scp -i your-key.pem .env ubuntu@SERVER_IP:/opt/vani/.env
+```
+```
+PUBLIC_ORIGIN=http://SERVER_IP
+# Real Gnani/Gemini (spends credits). Leave it out, or set 1, to stay on the free fakes.
+FAKE_PROVIDERS=0
+```
+
+**3. Allow the server's address** where the browser talks to other services:
+- S3 bucket CORS: add `http://SERVER_IP` to `AllowedOrigins` (`scripts/s3-cors.json`, then
+  `python scripts/set_s3_cors.py`, or the S3 console).
+- Supabase → Authentication → URL Configuration: add `http://SERVER_IP` as a redirect URL (Google sign-in).
+- Supabase SQL editor: apply `supabase/migrations/007_rate_limits.sql` (and any earlier ones not yet applied).
+
+**4. GitHub secrets** (repo → Settings → Secrets and variables → Actions):
+`EC2_HOST` = the server IP, `EC2_USER` = `ubuntu`, `EC2_SSH_KEY` = the whole contents of your `.pem`.
+
+**5. Deploy:** push to `main`, or Actions → "CI / Deploy" → Run workflow. The workflow runs every
+test suite against a real Postgres, builds the frontend, copies the code to `/opt/vani`, rebuilds and
+restarts the containers, and waits for both health checks.
+
+Without a domain the site is plain HTTP, so browsers block microphone recording (narration) and the
+server's IP is visible to users. Adding a domain behind Cloudflare (free) gives HTTPS and hides the IP.
+
+Useful on the server:
+```
+cd /opt/vani
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f editor-worker
+docker compose -f docker-compose.yml -f docker-compose.prod.yml restart     # after editing config/limits.toml
+docker stats --no-stream                                                    # memory per container
 ```
 
 ## Responsible use

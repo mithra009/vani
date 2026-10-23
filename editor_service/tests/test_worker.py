@@ -79,6 +79,9 @@ class Mem:
         async def upload_bytes(data, key, ct, workdir):
             mem.blobs[key] = data
 
+        async def no_limit(*a, **k):        # rate limiting has its own DB tests (test_ratelimit.py)
+            return None
+        mp.setattr(worker.ratelimit, "acquire", no_limit)
         mp.setattr(worker, "download", download)
         mp.setattr(worker, "upload_bytes", upload_bytes)
 

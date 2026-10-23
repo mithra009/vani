@@ -1,3 +1,7 @@
+/* Apple-HIG design tokens (semantic colors, timeline track palette); see DESIGN_REVIEW.md */
+@import "./styles/tokens.css";
+@import "./styles/editor-workspace.css";
+
 :root {
   --bg: #000000;
   --surface: #161617;
@@ -7,7 +11,7 @@
   --hairline-strong: #424245;
   --text: #f6f1e7;           /* ivory */
   --text-2: #d9d2c3;         /* deeper ivory for secondary text */
-  --text-3: #8f897e;
+  --text-3: #a39c90;         /* ≥5.1:1 on every surface (was #8f897e: 4.0:1 on --surface-3) */
   --blue: #9ec3f5;           /* pastel blue */
   --blue-btn: #9ec3f5;
   --blue-btn-text: #0d1b2e;

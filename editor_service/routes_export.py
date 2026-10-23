@@ -17,7 +17,8 @@ from pydantic import BaseModel, model_validator
 from media_service import storage
 from media_service.auth import User
 from . import db, keys, timeline
-from .errors import Conflict, InputInvalid, NotFound
+from .config import MAX_QUEUED_EXPORTS_PER_USER
+from .errors import Conflict, InputInvalid, LimitReached, NotFound
 from .routes import _json, pool
 
 router = APIRouter(prefix="/api/editor")
@@ -53,6 +54,8 @@ def public_export(e: dict) -> dict:
 async def create_export(request: Request, project_id: UUID, user: User, body: ExportRequest):
     p, pid, owner = pool(request), str(project_id), user["id"]
     project = await db.get_project(p, pid, owner)
+    if (await db.user_counts(p, owner))["exports"] >= MAX_QUEUED_EXPORTS_PER_USER:
+        raise LimitReached(f"You already have {MAX_QUEUED_EXPORTS_PER_USER} exports rendering. Wait for one to finish.")
     if project["status"] != "editing":
         raise Conflict(f"The project is {project['status'].replace('_', ' ')}; export once all audio is generated.")
     tl = await db.get_timeline(p, pid, owner, timeline.default_doc)

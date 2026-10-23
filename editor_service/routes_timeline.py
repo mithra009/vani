@@ -95,7 +95,8 @@ async def media_init(request: Request, project_id: UUID, user: User, body: Media
     ext = PurePosixPath(body.filename).suffix.lower().lstrip(".")
     m = await db.media_init(pool(request), str(project_id), user["id"], body.filename, ext, body.duration_s)
     signed = await asyncio.to_thread(storage.create_signed_upload_url, m["storage_key"])
-    return {"media": public_media(m), "uploadUrl": signed["url"], "token": signed["token"], "storageKey": m["storage_key"]}
+    return {"media": public_media(m), "uploadUrl": signed["url"], "token": signed["token"],
+            "uploadMethod": signed.get("method", "supabase-put"), "storageKey": m["storage_key"]}
 
 
 @router.post("/projects/{project_id}/media/{media_id}/complete")

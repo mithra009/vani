@@ -37,6 +37,7 @@ RUN pip install --retries 20 \
 COPY backend backend
 COPY media_service media_service
 COPY editor_service editor_service
+COPY config config
 
 RUN useradd --create-home --uid 10001 vani \
     && mkdir -p /app/storage \

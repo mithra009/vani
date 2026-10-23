@@ -7,6 +7,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from media_service.limits import limit
+
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
 
@@ -26,9 +28,9 @@ GNANI_API_KEY = os.getenv("GNANI_API_KEY", "").strip()
 GOOGLE_API_KEY = (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or "").strip()
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
 
-MAX_VIDEO_SECONDS = int(os.getenv("MAX_VIDEO_SECONDS", "600"))          # C10
+MAX_VIDEO_SECONDS = limit("uploads", "max_video_seconds", 600, "MAX_VIDEO_SECONDS")          # C10
 MAX_SCRIPT_CHARS = 20_000
-MAX_NARRATION_BYTES = int(os.getenv("MAX_NARRATION_BYTES", str(100_000_000)))
+MAX_NARRATION_BYTES = limit("uploads", "max_narration_mb", 100_000_000, "MAX_NARRATION_BYTES", scale=1_000_000)
 
 # Chunking (C1-proposal): about one sentence, 3–8 s of speech.
 CHUNK_TARGET_MIN_S, CHUNK_TARGET_MAX_S = 3.0, 8.0
@@ -41,6 +43,18 @@ DEFAULT_CPS = 13.0                     # chars/s used only to estimate script ch
 TTS_SPEED_MIN, TTS_SPEED_MAX = 0.85, 1.15   # C5-proposal: Timbre's own range
 TTS_SR = 48_000
 STT_SR = 16_000
+
+# Every limit below is set in config/limits.toml (env vars override); see that file for meanings.
+# Shared provider budgets: calls per minute for the WHOLE app, split fairly (ratelimit.py).
+RATE_LIMITS = {
+    "gnani_tts": limit("providers", "gnani_tts_per_min", 60, "GNANI_TTS_RPM"),
+    "gnani_stt": limit("providers", "gnani_stt_per_min", 4, "GNANI_STT_RPM"),
+    "gemini": limit("providers", "gemini_per_min", 30, "GEMINI_RPM"),
+}
+MAX_PROJECTS_PER_USER = limit("projects", "max_per_user", 50, "MAX_PROJECTS_PER_USER")
+MAX_ACTIVE_GENERATIONS = limit("projects", "max_generating_per_user", 3, "MAX_ACTIVE_GENERATIONS")
+BUSY_ACTIVE_USERS = limit("projects", "busy_active_users", 10, "BUSY_ACTIVE_USERS")
+MAX_QUEUED_EXPORTS_PER_USER = limit("projects", "max_queued_exports_per_user", 2, "MAX_QUEUED_EXPORTS_PER_USER")
 
 # Worker queue behaviour (mirrors media_service/config.py).
 JOB_MAX_ATTEMPTS = int(os.getenv("EDITOR_JOB_MAX_ATTEMPTS", "4"))
