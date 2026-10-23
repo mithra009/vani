@@ -78,8 +78,11 @@ async def get_project(pool_or_conn, project_id: str, owner_id: str) -> dict:
 
 async def list_projects(pool: asyncpg.Pool, owner_id: str) -> list[dict]:
     rows = await pool.fetch(
-        "select * from editor_projects where owner_id = $1 and deleted_at is null "
-        "order by created_at desc limit 200",
+        # latest_export_id: the newest finished video export, for "Watch" in the project list.
+        "select p.*, (select e.id from exports e where e.project_id = p.id and e.status = 'ready' "
+        "  and e.format in ('mp4', 'webm', 'mov') order by e.finished_at desc nulls last limit 1) as latest_export_id "
+        "from editor_projects p where p.owner_id = $1 and p.deleted_at is null "
+        "order by p.created_at desc limit 200",
         owner_id,
     )
     return [_row(r) for r in rows]

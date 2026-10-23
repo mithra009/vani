@@ -39,6 +39,7 @@ function fromJob(j) {
   return {
     key: `job:${j.id}`, id: j.id, source: "job", kind: j.mode === "narrate" ? "narrate" : "dub", name: j.name,
     status: text, bucket, href: `/jobs/${j.id}`, langs: langs(j.src_lang, j.tgt_lang),
+    watch: j.status === "done" ? () => Promise.resolve(api.downloads(j).video) : null,
     duration_s: j.duration_s, created_at: typeof j.created_at === "number" ? j.created_at : Date.parse(j.created_at),
   };
 }
@@ -48,6 +49,7 @@ function fromEditor(p) {
   return {
     key: `ed:${p.id}`, id: p.id, source: "editor", kind: p.input_kind, name: p.name,
     status: text, bucket, href: `/editor/${p.id}`, langs: langs(p.src_lang, p.tgt_lang),
+    watch: p.latest_export_id ? () => editorApi.exportUrl(p.id, p.latest_export_id).then((r) => r.url) : null,
     duration_s: p.duration_s, created_at: Date.parse(p.created_at),
   };
 }
@@ -93,6 +95,12 @@ export default function Projects() {
   const [renaming, setRenaming] = useState(null);   // { id, name }
   const [deleting, setDeleting] = useState(null);   // row
   const [busy, setBusy] = useState(false);
+  const [watching, setWatching] = useState(null);   // { name, url }
+
+  async function watch(r) {
+    try { setWatching({ name: r.name, url: await r.watch() }); }
+    catch (e) { toast.error(`Couldn't open the video: ${e.message}`); }
+  }
 
   useEffect(() => {
     // Each source fails on its own: one service being down never hides the other's projects.
@@ -209,7 +217,12 @@ export default function Projects() {
                       </span>
                     </Link>
                   )}
-                  {!editing && <span className={`pj-status pj-${r.bucket}`}>{r.status}</span>}
+                  {/* In Done every row is finished, so the badge says nothing; offer the latest export instead. */}
+                  {!editing && filter === "ready"
+                    ? (r.watch
+                        ? <button className="btn btn-secondary btn-sm pj-watch" onClick={() => watch(r)}>▶ Watch</button>
+                        : <span className="pj-watch-none muted body-sm">Not exported yet</span>)
+                    : !editing && <span className={`pj-status pj-${r.bucket}`}>{r.status}</span>}
                   {!editing && <span className="pj-when">{r.created_at ? ago(r.created_at) : ""}</span>}
                   {!editing && <RowMenu canRename={r.source === "job"} onRename={() => setRenaming({ id: r.id, name: r.name })}
                                         onDelete={() => setDeleting(r)} />}
@@ -220,6 +233,24 @@ export default function Projects() {
           {shown.length === 0 && <li className="pj-none muted body-sm">No projects match.</li>}
         </ul>
       )}
+
+      <AnimatePresence>
+        {watching && (
+          <motion.div className="modal-bg" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                      onClick={() => setWatching(null)}>
+            <motion.div className="modal pj-player" role="dialog" aria-modal="true" aria-label={watching.name}
+                        initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }}
+                        onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && setWatching(null)}>
+              <p className="modal-subject" title={watching.name}>{watching.name}</p>
+              <video src={watching.url} controls autoPlay playsInline />
+              <div className="modal-actions">
+                <a className="btn btn-quiet" href={watching.url} download>Download</a>
+                <button className="btn btn-primary" onClick={() => setWatching(null)} autoFocus>Close</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {deleting && (

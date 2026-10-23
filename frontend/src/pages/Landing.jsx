@@ -56,9 +56,17 @@ const MODELS = [
 ];
 
 const TEAM = [
-  { name: "Mithravardhan P N", initials: "MP" },
-  { name: "Arko Bera", initials: "AB" },
+  { name: "Mithravardhan P N", photo: "/team/mithra.jpg", linkedin: "https://www.linkedin.com/in/mithravardhanpn/",
+    github: "https://github.com/mithra009", email: "mithravardhanpn@gmail.com" },
+  { name: "Arko Bera", photo: "/team/arko.jpg", linkedin: "https://www.linkedin.com/in/arko-bera-682599239/",
+    github: "https://github.com/arkobera", email: "arkobera77@gmail.com" },
 ];
+
+const SOCIAL = {
+  linkedin: ["LinkedIn", <path key="l" fill="currentColor" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z" />],
+  github: ["GitHub", <path key="g" fill="currentColor" d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57v-2c-3.34.73-4.04-1.6-4.04-1.6-.55-1.4-1.34-1.77-1.34-1.77-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22v3.29c0 .32.21.7.82.58A12 12 0 0 0 12 .3z" />],
+  email: ["Email", <path key="e" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" d="M3 5.5h18v13H3zM3.5 6l8.5 7 8.5-7" />],
+};
 
 export default function Landing({ mode }) {
   const library = useLibrary();
@@ -195,14 +203,23 @@ export default function Landing({ mode }) {
       <section className="l-section l-team">
         <motion.div className="l-section-head" {...reveal}>
           <h2 className="l-h2">The team</h2>
-          <p className="l-sub">Vani is built by two developers for Gnani.ai's Great Indian AI Internship Challenge 2026.</p>
         </motion.div>
         <div className="team-grid">
           {TEAM.map((t, i) => (
             <motion.div key={t.name} className="team-card" {...reveal} transition={{ ...reveal.transition, delay: i * 0.1 }}>
-              <span className="team-avatar" aria-hidden="true">{t.initials}</span>
+              <img className="team-avatar" src={t.photo} alt={t.name} width="64" height="64" loading="lazy" />
               <span className="team-name">{t.name}</span>
               <span className="team-role">Developer</span>
+              <div className="team-links">
+                {["linkedin", "github", "email"].map((k) => (
+                  // Email opens Gmail's compose window: mailto: does nothing without a desktop mail app.
+                  <a key={k} className="team-link" target="_blank" rel="noopener noreferrer"
+                     href={k === "email" ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(t[k])}` : t[k]}
+                     aria-label={`${t.name} on ${SOCIAL[k][0]}`} title={SOCIAL[k][0]}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">{SOCIAL[k][1]}</svg>
+                  </a>
+                ))}
+              </div>
             </motion.div>
           ))}
         </div>
