@@ -4,7 +4,9 @@ the worker downloads inputs and runs the command.
 video  : trim/setpts per clip → concat → scale to the chosen height (never upscaled)
 audio  : original audio cut like the video, gain + optional auto-duck under the voice;
          each voice clip atrim + adelay to its timeline position; music with afade;
-         amix (overlaps mixed, D6) → loudnorm → exactly duration_t long
+         amix (overlaps mixed, D6) → loudnorm → exactly plan.duration long
+length : the video's length, or longer when voice runs past its end: the picture is then held
+         on black (tpad) until the last voice clip finishes, so no speech is cut off
 captions (C3-proposal): SRT/VTT sidecar, or burned in from an ASS file with complex shaping
 """
 
@@ -68,6 +70,7 @@ class Plan:
     auto_duck: bool
     voice_track_db: float
     music_track_db: float
+    video_duration: float | None = None  # < duration → black frames pad the gap
     voices: list[VoiceIn] = field(default_factory=list)
     music: list[MusicIn] = field(default_factory=list)
     burn_captions: str | None = None     # filename relative to the ffmpeg cwd
@@ -79,7 +82,9 @@ def plan_from_snapshot(snapshot: dict, *, fmt: str, height: int | None, audio_mi
     """→ (plan, warnings, captions). Voice clips are placed with the same rules the editor shows."""
     doc = snapshot["doc"]
     placed, hidden = timeline.layout(doc, snapshot["chunks"])
-    dur = timeline.duration_t(doc)
+    video_dur = timeline.duration_t(doc)
+    voice_end = max((p.t + p.length for p in placed if not p.muted and p.length > 0), default=0.0)
+    dur = round(max(video_dur, voice_end), 6)
     texts = {str(c["id"]): c["text"] for c in snapshot["chunks"]}
     warnings = [{"chunk_id": p.chunk_id, "flags": p.flags} for p in placed if p.flags]
     warnings += [{"chunk_id": h["chunk_id"], "flags": [h["reason"]]} for h in hidden]
@@ -90,7 +95,6 @@ def plan_from_snapshot(snapshot: dict, *, fmt: str, height: int | None, audio_mi
         start, trim_in, length = p.t, p.trim_in, p.length
         if start < 0:                                    # clip starts before 0: drop the head
             trim_in, length, start = trim_in - start, length + start, 0.0
-        length = min(length, dur - start)               # past the end is cut (flagged above)
         if length <= 0.01:
             continue
         voices.append(VoiceIn(chunk_paths[p.chunk_id], start, trim_in, length, p.gain_db))
@@ -104,7 +108,8 @@ def plan_from_snapshot(snapshot: dict, *, fmt: str, height: int | None, audio_mi
     oa = doc["original_audio"]
     plan = Plan(
         source=source, source_has_audio=source_has_audio, source_height=source_height,
-        video_clips=[(c["src_in"], c["src_out"]) for c in doc["video"]], duration=dur, fmt=fmt, height=height,
+        video_clips=[(c["src_in"], c["src_out"]) for c in doc["video"]], duration=dur, video_duration=video_dur,
+        fmt=fmt, height=height,
         audio_mix=audio_mix, orig_gain_db=oa["gain_db"], orig_muted=oa["muted"], auto_duck=oa["auto_duck"],
         voice_track_db=doc["voice"]["gain_db"], music_track_db=doc["music"]["gain_db"], voices=voices, music=music,
     )
@@ -187,7 +192,9 @@ def build_args(plan: Plan, out: str) -> list[str]:
         # ASS + complex shaping: Indic scripts need HarfBuzz shaping or conjuncts fall apart
         # (ತ್ತ renders as ತತ). The file is sized to this output (captions_ass).
         sub = f",ass={plan.burn_captions}:shaping=complex" if plan.burn_captions else ""
-        f.append(f"[vcat]scale=-2:{h}:flags=lanczos,setsar=1{sub}[vout]")
+        pad = plan.duration - (plan.video_duration if plan.video_duration is not None else plan.duration)
+        black = f",tpad=stop_mode=add:stop_duration={pad:.6f}:color=black" if pad > 0.01 else ""
+        f.append(f"[vcat]scale=-2:{h}:flags=lanczos,setsar=1{black}{sub}[vout]")
 
     def fmt_audio(label_in: str, label_out: str, extra: str = "") -> str:
         return f"[{label_in}]aresample={MIX_SR},aformat=sample_fmts=fltp:channel_layouts=stereo{extra}[{label_out}]"

@@ -39,11 +39,16 @@ export class PreviewEngine {
 
   _buffer(key, urlPromise) {
     if (!this.buffers.has(key)) {
-      const p = urlPromise()
-        // no-store: an <audio> tag may have cached this URL without CORS headers, which fails a fetch.
+      // no-store: an <audio> tag may have cached this URL without CORS headers, which fails a fetch.
+      // A dropped connection or an expired link is retried with a fresh link before it's reported.
+      const once = () => urlPromise()
         .then((url) => fetch(url, { cache: "no-store" }))
-        .then((r) => { if (!r.ok) throw new Error(`audio download failed (${r.status})`); return r.arrayBuffer(); })
-        .then((ab) => this.ctx.decodeAudioData(ab));
+        .then((r) => { if (!r.ok) throw new Error(`audio download failed (${r.status})`); return r.arrayBuffer(); });
+      const attempt = (n) => once().catch((e) => {
+        if (n >= 3) throw e;
+        return new Promise((ok) => setTimeout(ok, 400 * n)).then(() => attempt(n + 1));
+      });
+      const p = attempt(1).then((ab) => this.ctx.decodeAudioData(ab));
       p.catch(() => this.buffers.delete(key));   // let a later play retry
       this.buffers.set(key, p);
     }

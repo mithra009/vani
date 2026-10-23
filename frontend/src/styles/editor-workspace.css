@@ -447,3 +447,27 @@ body.editor-compact .ed-page.ed-page-fixed { height: 100vh; height: 100dvh; }
 .ed-page .vp-label { font-size: 11px; }
 .ed-page .vp-name { font-size: 14px; }
 .ed-page .vp-current .btn { height: 30px; padding: 0 14px; font-size: 13px; }
+
+/* ================================================================ Phones: one column, page scrolls
+   (the fixed-screen rules above assume a wide screen; on a phone the controls would squeeze the
+   video into a sliver). Video first at its own aspect ratio, so portrait clips fill the width. */
+@media (max-width: 760px) {
+  body.app-fixed { overflow: auto; }
+  .ed-page.ed-page-fixed, body.editor-compact .ed-page.ed-page-fixed { height: auto; }
+  .ed-page-fixed > .ed-sec:last-child { display: block; }
+  .ed-page-fixed .pp, .ed-page-fixed .pp-auto .pp-top, .ed-page-fixed .pp-top, .pp-top {
+    display: flex; flex-direction: column; height: auto !important; max-height: none; min-height: 0;
+  }
+  .pp-top .pp-program { order: -1; }
+  .pp-top .pp-controls { max-height: 40vh; }
+  .pp-monitor { aspect-ratio: auto; height: min(60vh, 560px); flex: none; padding: 4px; }
+  .pp-video { aspect-ratio: auto; width: auto; height: 100%; max-width: 100%; }
+  .ed-page-fixed .pp-timeline, .ed-page-fixed .pp-auto .pp-timeline { height: 240px; flex: none; }
+  .pp-splitter, .pp-keys { display: none; }
+  .pp { --pp-head-w: 84px; }
+  .pp-tl-head input[type="range"] { display: none; }        /* +/− and Fit stay; the slider doesn't fit */
+  .pp-tl-head button { white-space: nowrap; }
+  .pp-tl-head { flex-wrap: wrap; height: auto; row-gap: 4px; padding-top: 4px; padding-bottom: 4px; }
+  .ed-head-row .ed-head-main { flex-basis: 100%; }
+  .ed-head-compact .ed-compact-title { flex: 1; min-width: 0; }
+}

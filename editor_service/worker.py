@@ -28,7 +28,8 @@ from backend.app import media as amedia
 from media_service import storage
 from . import chunking, db, export, keys, placement, providers, ratelimit
 from .config import (
-    CHUNK_LLM_ATTEMPTS, DEFAULT_CPS, EXPORT_TIMEOUT_SECONDS, JOB_MAX_ATTEMPTS, MAX_VIDEO_SECONDS, SCRIPT_GAP_S,
+    CHUNK_LLM_ATTEMPTS, DEFAULT_CPS, EXPORT_TIMEOUT_SECONDS, GNANI_SPEED_MAX, GNANI_SPEED_MIN, JOB_MAX_ATTEMPTS,
+    MAX_VIDEO_SECONDS, SCRIPT_GAP_S,
     WORKER_POLL_SECONDS, WORKER_REAP_SECONDS, WORKER_STALE_JOB_SECONDS, check_providers,
 )
 from .errors import EditorError, InputInvalid, MediaFailed, OutputInvalid, Skip, StorageUnavailable
@@ -174,6 +175,20 @@ def wav_seconds(data: bytes) -> float:
     return info.frames / info.samplerate
 
 
+async def stretch_wav(data: bytes, tempo: float, workdir: Path) -> bytes:
+    """Speed speech up or down by `tempo` without changing its pitch (one atempo covers 0.5–2.0)."""
+    src, dst = workdir / "tts_raw.wav", workdir / "tts_tempo.wav"
+    src.write_bytes(data)
+    proc = await asyncio.create_subprocess_exec(
+        amedia_bin("ffmpeg"), "-y", "-loglevel", "error", "-i", str(src), "-filter:a", f"atempo={tempo:.4f}", str(dst),
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+    )
+    _, err = await proc.communicate()
+    if proc.returncode != 0:
+        raise MediaFailed(f"Couldn't change the voice speed: {err.decode(errors='replace')[-300:]}")
+    return dst.read_bytes()
+
+
 async def handle_tts(pool, job: dict, project: dict, workdir: Path) -> None:
     chunk = await db.chunk_generating(pool, job["chunk_id"], job["chunk_revision"])
     if chunk is None:
@@ -187,7 +202,11 @@ async def handle_tts(pool, job: dict, project: dict, workdir: Path) -> None:
     else:
         speech, _ = providers.get()
         await ratelimit.acquire(pool, "gnani_tts", owner)     # cache hits above never count
-        data = await speech.tts(chunking.tts_text(chunk["text"], chunk["emotion_tag"]), voice, lang, float(chunk["speed"]))
+        speed = float(chunk["speed"])
+        gnani_speed = min(max(speed, GNANI_SPEED_MIN), GNANI_SPEED_MAX)
+        data = await speech.tts(chunking.tts_text(chunk["text"], chunk["emotion_tag"]), voice, lang, gnani_speed)
+        if abs(speed / gnani_speed - 1) > 1e-3:
+            data = await stretch_wav(data, speed / gnani_speed, workdir)
         seconds = wav_seconds(data)
         audio_key = keys.artifact_path(owner, "chunk_wav", key, "wav")
         await upload_bytes(data, audio_key, "audio/wav", workdir)
@@ -292,11 +311,15 @@ async def handle_export(pool, job: dict, project: dict, workdir: Path) -> None:
 
 
 def source_height(path: Path) -> int:
-    out = amedia.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=height",
-                      "-of", "csv=p=0", str(path)])
+    """Height as displayed. Phone videos are often stored sideways with a rotation flag (which ffmpeg
+    applies when decoding), so a ±90° rotation swaps width and height."""
+    out = amedia.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                      "stream=width,height:stream_tags=rotate:stream_side_data=rotation", "-of", "json", str(path)])
     try:
-        return int(out.strip().splitlines()[0])
-    except (ValueError, IndexError) as e:
+        s = json.loads(out)["streams"][0]
+        rot = s.get("tags", {}).get("rotate") or next((d["rotation"] for d in s.get("side_data_list", []) if "rotation" in d), 0)
+        return int(s["width"] if abs(int(float(rot))) % 180 == 90 else s["height"])
+    except (ValueError, IndexError, KeyError, TypeError) as e:
         raise amedia.MediaError(f"Couldn't read the video height: {out!r}") from e
 
 

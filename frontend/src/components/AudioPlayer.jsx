@@ -2,6 +2,7 @@
 // native <audio controls>. `src` may be a URL or a function returning a Promise<URL> (fetched on
 // first play, so signed URLs are only requested when needed).
 import { useEffect, useRef, useState } from "react";
+import { Loader } from "./Icons.jsx";
 import { clock } from "../lib/format.js";
 
 export default function AudioPlayer({ src, label = "Audio", autoPlay = false, onError, compact = false }) {
@@ -56,7 +57,7 @@ export default function AudioPlayer({ src, label = "Audio", autoPlay = false, on
     <div className={`ap ${compact ? "ap-compact" : ""} ${state === "error" ? "ap-error" : ""}`}>
       <button className="ap-btn" onClick={toggle} aria-label={playing ? `Pause ${label}` : `Play ${label}`}
               disabled={state === "loading"}>
-        {state === "loading" ? <span className="ap-spin" /> : playing ? (
+        {state === "loading" ? <Loader size={14} /> : playing ? (
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
         ) : (
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" /></svg>

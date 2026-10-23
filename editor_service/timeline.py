@@ -31,7 +31,7 @@ def new_id(prefix: str) -> str:
 def default_doc(duration_s: float) -> dict:
     return {
         "video": [{"id": "vc0", "src_in": 0.0, "src_out": round(float(duration_s), 3)}],
-        "original_audio": {"gain_db": -12.0, "muted": True, "auto_duck": True},    # C8: linked to video; muted until turned on
+        "original_audio": {"gain_db": -12.0, "muted": True, "auto_duck": False},   # C8: linked to video; muted, no ducking until turned on
         "voice": {"gain_db": 0.0, "clips": {}},
         "music": {"gain_db": -18.0, "clips": []},
         "captions": {"enabled": False},

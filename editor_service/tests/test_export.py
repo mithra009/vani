@@ -105,6 +105,32 @@ def test_burned_captions_render(media, tmp_path):
     assert abs(float(probe(tmp_path / "out.mp4")["format"]["duration"]) - 5.0) <= FRAME + 0.03
 
 
+def test_voice_past_the_end_extends_the_video_on_black(media, tmp_path):
+    snap = snapshot()
+    snap["chunks"][2]["audio_duration_s"] = 2.5          # z starts at 3.0 on a 5 s timeline → ends at 5.5
+    plan, _, caps = export.plan_from_snapshot(
+        snap, fmt="mp4", height=None, audio_mix="voice", source=str(media / "src.mp4"), source_has_audio=True,
+        source_height=360, chunk_paths={"a": str(media / "v1.wav"), "x": str(media / "v1.wav"), "z": str(media / "v2.wav")},
+        media_paths={"mu": str(media / "music.mp3")})
+    assert (plan.video_duration, plan.duration) == (5.0, 5.5)
+    assert plan.voices[-1].length == 2.5 and caps[-1]["end"] == 5.5      # nothing cut off
+    out = tmp_path / "long.mp4"
+    ff(*export.build_args(plan, str(out))[1:])
+    assert abs(float(probe(out)["format"]["duration"]) - 5.5) <= FRAME + 0.03
+    # The added tail is black: the last frame's mean luma is ~16 (limited-range black).
+    frame = subprocess.run(["ffmpeg", "-v", "error", "-sseof", "-0.1", "-i", str(out), "-frames:v", "1",
+                            "-vf", "scale=8:8,format=gray", "-f", "rawvideo", "-"], capture_output=True, check=True).stdout
+    assert max(frame) <= 20, list(frame)
+
+
+def test_source_height_follows_phone_rotation(media, tmp_path):
+    """Phone clips are stored sideways with a rotation flag; ffprobe's csv output used to read '1080,'."""
+    from editor_service.worker import source_height
+    ff("-display_rotation", "90", "-i", str(media / "src.mp4"), "-c", "copy", str(tmp_path / "rot.mp4"))
+    assert source_height(media / "src.mp4") == 360
+    assert source_height(tmp_path / "rot.mp4") == 640       # displayed upright: 360x640
+
+
 def test_no_voice_no_original_still_renders_silence(media, tmp_path):
     plan, _, _ = make_plan(media, "mp3", height=None, audio_mix="voice")
     plan.voices = []

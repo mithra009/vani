@@ -17,7 +17,8 @@ const FLAG_TEXT = {
   before_start: "Starts before 0 (cut at export)", on_cut: "Speech runs into a video cut",
 };
 const HIDDEN_TEXT = { video_cut: "its video was cut", no_audio: "no audio yet", unplaced: "not placed" };
-const ZOOM_MIN = 8, ZOOM_MAX = 200;
+const ZOOM_MIN = 4, ZOOM_MAX = 200;
+const TAIL_PX = 48;                 // empty lane after the end, room to drop a clip past it
 const STEP_S = 0.1;                       // ← / → nudge; Shift for 1 s
 const TOP_KEY = "vani.editor.topHeight";
 const TRACKS = 5, RULER_H = 22, ROW_MIN = 18, ROW_MAX = 26;
@@ -136,6 +137,15 @@ export default function TimelineEditor({ project, chunks }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // Open zoomed to fit the whole timeline (once; after that the user's zoom is kept).
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current || !tl.doc || !scrollRef.current) return;
+    fitted.current = true;
+    const w = scrollRef.current.clientWidth || 900;
+    setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, (w - TAIL_PX) / Math.max(1, durationT(tl.doc)))));
+  }, [tl.doc]);
+
   if (tl.status === "loading") return <div className="pp pp-loading"><Loader size={36} /></div>;
   if (tl.status === "error") return <div className="banner error" role="alert"><span className="banner-dot" />Timeline failed to load: {tl.error}</div>;
 
@@ -144,7 +154,7 @@ export default function TimelineEditor({ project, chunks }) {
   const vl = videoLayout(doc);
   const { placed, hidden } = layout(doc, chunks);
   const byId = Object.fromEntries(chunks.map((c) => [String(c.id), c]));
-  const width = Math.max(600, end * zoom + 120);
+  const width = Math.max(240, end * zoom + TAIL_PX);
   const audible = placed.filter((p) => !p.muted);
   const caption = doc.captions.enabled ? audible.find((p) => t >= p.t && t < p.t + p.length) : null;
   const mediaName = (id) => media.find((x) => String(x.id) === id)?.filename || "audio";
@@ -170,7 +180,7 @@ export default function TimelineEditor({ project, chunks }) {
 
   function fitZoom() {
     const w = scrollRef.current?.clientWidth || 900;
-    setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, (w - 40) / Math.max(1, end))));
+    setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, (w - TAIL_PX) / Math.max(1, end))));
   }
 
   function razorVideoAt(c, at) {
@@ -260,7 +270,7 @@ export default function TimelineEditor({ project, chunks }) {
             {proxyUrl
               ? <video ref={videoRef} src={proxyUrl} crossOrigin="anonymous" playsInline preload="auto" className="pp-video"
                        onError={() => setErr("The preview video failed to load (the link may have expired; reload the page).")} />
-              : <div className="pp-video pp-video-empty">Preview video is still processing…</div>}
+              : <div className="pp-video pp-video-empty"><Loader size={24} /> Preview video is still processing…</div>}
             {caption && <div className="pp-caption">{byId[caption.chunk_id]?.text}</div>}
           </div>
           <div className="pp-transport">
@@ -270,7 +280,7 @@ export default function TimelineEditor({ project, chunks }) {
               <TBtn label="Step back (←)" onClick={() => seek(t - 1)}><path d="M11 6l-7 6 7 6zM20 6l-7 6 7 6z" /></TBtn>
               <button className="pp-play" onClick={togglePlay} disabled={!proxyUrl || loadingPlay}
                       aria-label={playing ? "Pause (Space)" : "Play (Space)"} title={playing ? "Pause (Space)" : "Play (Space)"}>
-                {loadingPlay ? <span className="ap-spin" /> : playing
+                {loadingPlay ? <Loader size={14} /> : playing
                   ? <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
                   : <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" /></svg>}
               </button>

@@ -271,7 +271,9 @@ input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit
 .bar > span { display: block; height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.3s linear; }
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--surface-3); border-top-color: var(--blue); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.loader { color: var(--blue); display: block; flex-shrink: 0; }
+.loader { color: var(--blue); display: inline-block; vertical-align: -0.2em; margin-right: 6px; flex-shrink: 0; }
+.progress-wrap .loader, .pp-loading .loader, .stage-icon .loader, .ap-btn .loader, .pp-tbtn .loader, button[aria-label^="Pause"] .loader, button[aria-label^="Play"] .loader { display: block; margin-right: 0; }
+.pp-video-empty { display: flex; align-items: center; justify-content: center; gap: 4px; }
 .loader path { transform-box: fill-box; transform-origin: center; animation: loader-bar 1.8s ease-in-out infinite; }
 @keyframes loader-bar { 0%, 60%, 100% { transform: scaleY(0.35); opacity: 0.5; } 30% { transform: scaleY(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .loader path { animation-duration: 3s; } }

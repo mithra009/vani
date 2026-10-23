@@ -17,7 +17,7 @@ const clone = (x) => (typeof structuredClone === "function" ? structuredClone(x)
 export function defaultDoc(durationS) {
   return {
     video: [{ id: "vc0", src_in: 0, src_out: Math.round(durationS * 1000) / 1000 }],
-    original_audio: { gain_db: -12, muted: false, auto_duck: true },
+    original_audio: { gain_db: -12, muted: true, auto_duck: false },
     voice: { gain_db: 0, clips: {} },
     music: { gain_db: -18, clips: [] },
     captions: { enabled: false },

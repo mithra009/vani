@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { clock } from "../lib/format.js";
-import { Arrow } from "./Icons.jsx";
+import { Arrow, Loader } from "./Icons.jsx";
 
 const MIN_TAKE = 2;
 
@@ -231,7 +231,7 @@ export default function Narrate({ job, onSubmit, submitting }) {
 
         <button className="btn btn-primary" disabled={!take || recording || submitting}
                 onClick={() => { stopPreview(); onSubmit(take); }} style={{ width: "100%" }}>
-          {submitting ? "Uploading…" : "Use this take"} {!submitting && <Arrow />}
+          {submitting ? <><Loader size={14} /> Uploading…</> : "Use this take"} {!submitting && <Arrow />}
         </button>
         {job.demo && <p className="caption">Demo mode: your recording stays in the browser. The transcript will be sample text.</p>}
       </section>

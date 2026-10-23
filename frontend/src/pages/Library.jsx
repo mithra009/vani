@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader } from "../components/Icons.jsx";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { api } from "../lib/api.js";
@@ -104,7 +105,7 @@ export default function Library() {
 
       {busy && (
         <div className="banner" role="status" style={{ marginBottom: 20 }}>
-          <span className="banner-dot" />
+          <Loader size={16} />
           <span style={{ flex: 1 }}>
             {busy.phase === "upload" ? `Uploading ${busy.name}… ${busy.pct ?? 0}%`
               : busy.phase === "finalize" ? `Finalizing ${busy.name}…`
@@ -132,7 +133,7 @@ export default function Library() {
                   {v.duration_s && <span className="lib-dur mono">{clock(v.duration_s)}</span>}
                   {v.local && <span className="lib-badge">Not saved</span>}
                   {v.remote && v.status && v.status !== "READY" && (
-                    <span className="lib-badge">{STATUS_LABEL[v.status] || v.status}</span>
+                    <span className="lib-badge">{v.status === "PROCESSING" && <Loader size={12} />}{STATUS_LABEL[v.status] || v.status}</span>
                   )}
                   {(v.local || v.proxy_status === "READY") && (
                     <button className="lib-play" aria-label={`Preview ${v.name}`} onClick={() => openPreview(v)}>
@@ -208,7 +209,7 @@ export default function Library() {
               {preview.url ? (
                 <video className="pv-video" src={preview.url} controls autoPlay playsInline />
               ) : (
-                <div className="pv-video pv-loading" role="status"><span className="ap-spin" /> Preparing the preview…</div>
+                <div className="pv-video pv-loading" role="status"><Loader size={14} /> Preparing the preview…</div>
               )}
             </motion.div>
           </motion.div>

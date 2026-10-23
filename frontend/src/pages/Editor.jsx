@@ -161,6 +161,12 @@ function CollapseButton({ collapse }) {
   );
 }
 
+// "Ready to edit" is the normal state, so it isn't shown; only states that need attention are.
+function StatusPill({ status }) {
+  if (status === "editing") return null;
+  return <span className={`status-pill status-${status}`}>{status === "generating" && <Loader size={12} />}{STATUS_LABEL[status] || status}</span>;
+}
+
 function ProjectHeader({ project, tabs, compact, collapse }) {
   const KIND = { video_audio: "Dub of the video's audio", script: "Script voice-over", narration: "Narration" };
   if (compact) {
@@ -170,7 +176,7 @@ function ProjectHeader({ project, tabs, compact, collapse }) {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
         </Link>
         <span className="ed-compact-title" title={project.name}>{project.name}</span>
-        <span className={`status-pill status-${project.status}`}>{STATUS_LABEL[project.status] || project.status}</span>
+        <StatusPill status={project.status} />
         <span style={{ flex: 1 }} />
         {tabs}
         <CollapseButton collapse={collapse} />
@@ -187,7 +193,7 @@ function ProjectHeader({ project, tabs, compact, collapse }) {
         <div className="ed-head-main">
           <div className="ed-title-row">
             <h1 className="ed-title" title={project.name}>{project.name}</h1>
-            <span className={`status-pill status-${project.status}`}>{STATUS_LABEL[project.status] || project.status}</span>
+            <StatusPill status={project.status} />
           </div>
           <div className="ed-meta">
             <span>{KIND[project.input_kind] || project.input_kind}</span>
@@ -405,7 +411,7 @@ function ChunkRow({ chunk, project }) {
                          src={() => editor.chunkAudioUrl(project.id, chunk.id).then((r) => r.url)} onError={setErr} />
           )}
           {(chunk.status === "pending" || chunk.status === "generating") && (
-            <span className="chunk-wait"><span className="ap-spin" /> Generating…</span>
+            <span className="chunk-wait"><Loader size={14} /> Generating…</span>
           )}
           {chunk.status === "failed" && (
             <button className="btn btn-quiet btn-xs" onClick={regen} disabled={busy}>Retry</button>
@@ -427,7 +433,7 @@ function ChunkRow({ chunk, project }) {
               </select>
             </label>
             <label className="ne-field-inline">Speed
-              <input type="number" className="input input-sm" value={speed} min={0.85} max={1.15} step={0.05}
+              <input type="number" className="input input-sm" value={speed} min={0.5} max={2} step={0.05}
                      onChange={(e) => setSpeed(e.target.value)} disabled={busy} style={{ width: 84 }} />
             </label>
             <span style={{ flex: 1 }} />

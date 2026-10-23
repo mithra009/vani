@@ -1,6 +1,7 @@
 // Export (R8, D10): format × resolution, audio-only mix choice (C13), captions (C3), progress,
 // downloads. Polls while anything is rendering; every failure is shown with its reason.
 import { useEffect, useState } from "react";
+import { Loader } from "./Icons.jsx";
 import * as editor from "../lib/editorApi.js";
 import { ago } from "../lib/format.js";
 
@@ -148,6 +149,7 @@ export default function ExportPanel({ project, chunks = [] }) {
                     <div className="xp-item-side">
                       {working && (
                         <span className="xp-progress" title={`${Math.round(e.progress * 100)}%`}>
+                          <Loader size={16} />
                           <span className="xp-progress-bar"><span style={{ width: `${Math.max(3, Math.round(e.progress * 100))}%` }} /></span>
                           <span className="xp-progress-n mono">{e.status === "queued" ? "Queued" : `${Math.round(e.progress * 100)}%`}</span>
                         </span>

@@ -1,6 +1,7 @@
 // One-take narration (D12): the video plays from 0 while the mic records; the take is uploaded
 // to a signed URL and the server cleans it (noise reduction, amplification) before STT (R4).
 import { useEffect, useRef, useState } from "react";
+import { Loader } from "./Icons.jsx";
 import * as editor from "../lib/editorApi.js";
 import { uploadToStorage } from "../lib/libraryStore.js";
 import { api } from "../lib/api.js";
@@ -98,7 +99,7 @@ export default function NarrationTake({ project }) {
             <button className="btn btn-primary" onClick={submit}>Use this take</button>
           </>
         )}
-        {state === "uploading" && <span className="body-sm">Uploading {Math.round(progress * 100)}%…</span>}
+        {state === "uploading" && <span className="body-sm loader-inline"><Loader size={14} /> Uploading {Math.round(progress * 100)}%…</span>}
       </div>
       {err && <div className="banner error" role="alert"><span className="banner-dot" /><span>{err}</span></div>}
     </div>

@@ -5,7 +5,7 @@ import { api } from "../lib/api.js";
 import { SOURCE_LANGS, TARGET_LANGS, langName } from "../lib/catalog.js";
 import { addVideos, stripExt, useLibrary } from "../lib/libraryStore.js";
 import { ago, bytes, clock } from "../lib/format.js";
-import { Arrow, Check } from "../components/Icons.jsx";
+import { Arrow, Check, Loader } from "../components/Icons.jsx";
 
 const ACCEPT = "video/mp4,video/quicktime,video/webm,video/x-matroska,.mkv";
 
@@ -205,7 +205,7 @@ export default function NewProject({ mode: apiMode }) {
 
                   <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
                     <button className="btn btn-primary" disabled={!tgt || busy} onClick={start}>
-                      {busy ? (upload > 0 && upload < 1 ? `Uploading ${Math.round(upload * 100)}%` : "Creating project…")
+                      {busy && <Loader size={14} />}{busy ? (upload > 0 && upload < 1 ? `Uploading ${Math.round(upload * 100)}%` : "Creating project…")
                         : mode === "dub" ? "Create and transcribe" : "Create and start narrating"}
                       {!busy && <Arrow />}
                     </button>

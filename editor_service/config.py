@@ -40,7 +40,8 @@ CHUNK_LLM_ATTEMPTS = 2                 # one retry on invalid Gemini output, the
 SCRIPT_GAP_S = 0.3
 DEFAULT_CPS = 13.0                     # chars/s used only to estimate script chunk length
 
-TTS_SPEED_MIN, TTS_SPEED_MAX = 0.85, 1.15   # C5-proposal: Timbre's own range
+TTS_SPEED_MIN, TTS_SPEED_MAX = 0.5, 2.0       # what a chunk may ask for
+GNANI_SPEED_MIN, GNANI_SPEED_MAX = 0.85, 1.15  # Timbre's own range; the rest is ffmpeg atempo (pitch kept)
 TTS_SR = 48_000
 STT_SR = 16_000
 

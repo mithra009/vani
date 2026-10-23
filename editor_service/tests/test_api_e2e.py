@@ -124,6 +124,50 @@ def test_script_to_export(env):
         assert again["status"] == "ready"
 
 
+def test_emotion_and_speed_edits_reach_tts(env, monkeypatch):
+    """Changing a chunk's emotion or speed must re-voice it with the new tag and speed, not reuse the old audio."""
+    from fastapi.testclient import TestClient
+    from editor_service import providers, worker
+    from editor_service.main import app
+
+    calls = []
+    real_get = providers.get
+
+    def recording_get():
+        speech, llm = real_get()
+
+        class Rec:
+            def __getattr__(self, name):
+                return getattr(speech, name)
+
+            async def tts(self, text, voice, lang, speed):
+                calls.append((text, speed))
+                return await speech.tts(text, voice, lang, speed)
+        return Rec(), llm
+    monkeypatch.setattr(worker.providers, "get", recording_get)
+
+    with TestClient(app) as c:
+        pid = c.post("/api/editor/projects", json={
+            "asset_id": "11111111-1111-1111-1111-111111111111", "name": "Emo", "input_kind": "script",
+            "script_text": "Welcome to the demo. Haha, this part is funny! And this is the end.",
+            "src_lang": "en-IN", "tgt_lang": "en-IN", "voice": {"mode": "persona", "voice_id": "anu"}}).json()["id"]
+        drain()
+        ch = c.get(f"/api/editor/projects/{pid}").json()["chunks"][0]
+        calls.clear()
+
+        r = c.patch(f"/api/editor/projects/{pid}/chunks/{ch['id']}", json={"emotion_tag": "whispers", "speed": 2.0},
+                    headers={"If-Match": str(ch["revision"])})
+        assert r.status_code == 200, r.text
+        drain()
+
+        # 2× is past Gnani's range: it is asked for its max (1.15) and ffmpeg stretches the rest.
+        assert calls == [(f"<whispers> {ch['text']}", 1.15)], calls
+        after = c.get(f"/api/editor/projects/{pid}").json()["chunks"][0]
+        assert after["status"] == "ready" and after["emotion_tag"] == "whispers" and after["revision"] == ch["revision"] + 1
+        fake_1x = ch["audio_duration_s"] * float(ch["speed"])               # the fake voice scales length by 1/speed
+        assert after["audio_duration_s"] == pytest.approx(fake_1x / 2.0, rel=0.08), (ch, after)
+
+
 def test_export_failure_is_visible(env, monkeypatch):
     from fastapi.testclient import TestClient
     from editor_service import worker
