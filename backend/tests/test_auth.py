@@ -16,6 +16,8 @@ def client():
 
 def test_requests_without_a_valid_token_are_rejected(client, monkeypatch):
     monkeypatch.setattr(auth, "AUTH_DISABLED", False)
+    # Malformed tokens fail on their header, before any key fetch, so no JWKS URL is needed (CI has none).
+    monkeypatch.setattr(auth, "_jwks", auth.jwt.PyJWKClient("https://example.invalid/jwks"))
     assert client.get("/api/jobs").status_code == 401
     assert client.get("/api/jobs", headers={"Authorization": "Bearer not.a.jwt"}).status_code == 401
     assert client.get("/api/jobs?access_token=forged").status_code == 401
