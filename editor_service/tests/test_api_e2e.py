@@ -27,6 +27,10 @@ def env(monkeypatch, tmp_path):
         blobs[key] = open(path, "rb").read()
     monkeypatch.setattr(storage, "upload_file", upload_file)
 
+    async def ready():
+        pass
+    monkeypatch.setattr("editor_service.main.storage_ready", ready)   # storage is in memory, nothing to reach
+
     src = tmp_path / "src.mp4"
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=8:size=320x240:rate=25",
                     "-f", "lavfi", "-i", "sine=f=220:d=8", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
