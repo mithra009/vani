@@ -91,6 +91,7 @@ async def init_upload(request: Request, user: User, body: dict):
         "bucket": MEDIA_BUCKET,
         "uploadUrl": signed["url"],
         "token": signed["token"],
+        "uploadMethod": signed.get("method", "supabase-put"),
         "asset": public(asset),
     }
 

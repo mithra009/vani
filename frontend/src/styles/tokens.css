@@ -1,0 +1,238 @@
+/* ================================================================
+   VANI DESIGN TOKENS - Apple HIG Compliant
+   Semantic color, type, spacing, elevation, motion for dark mode
+   ================================================================ */
+
+:root {
+  /* ============================================================
+     COLOR SYSTEM - Semantic Tokens (Dark Mode)
+     Based on Apple HIG: label, fill, separator, link
+     ============================================================ */
+
+  /* --- Base Backgrounds --- */
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #161617;
+  --color-bg-tertiary: #1d1d1f;
+  --color-bg-quaternary: #2a2a2d;
+
+  /* --- Liquid Glass (Functional Layer ONLY) ---
+       Use for: nav, sidebars, toolbars, inspector, modals, popovers
+       DO NOT use for: content areas, full-screen backgrounds */
+  --glass-bg: rgba(22, 22, 23, 0.72);
+  --glass-bg-strong: rgba(22, 22, 23, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-strong: rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --glass-blur: saturate(180%) blur(20px);
+
+  /* --- Label (Text) --- */
+  --color-label-primary: #f6f1e7;        /* Primary text - ivory */
+  --color-label-secondary: #d9d2c3;      /* Secondary text */
+  --color-label-tertiary: #a8a296;       /* Tertiary - meets 4.5:1 */
+  --color-label-quaternary: #8f897e;     /* Disabled/meta only */
+  --color-label-inverse: #0d1b2e;        /* On primary blue */
+  --color-label-on-accent: #000000;      /* On colored backgrounds */
+
+  /* --- Fill (Backgrounds for controls) --- */
+  --color-fill-primary: rgba(246, 241, 231, 0.08);
+  --color-fill-secondary: rgba(246, 241, 231, 0.05);
+  --color-fill-tertiary: rgba(246, 241, 231, 0.03);
+  --color-fill-quaternary: rgba(246, 241, 231, 0.01);
+  --color-fill-selected: rgba(158, 195, 245, 0.15);
+  --color-fill-hover: rgba(246, 241, 231, 0.1);
+  --color-fill-pressed: rgba(246, 241, 231, 0.12);
+  --color-fill-danger: rgba(255, 69, 58, 0.12);
+  --color-fill-success: rgba(48, 209, 88, 0.12);
+  --color-fill-warning: rgba(255, 159, 10, 0.12);
+
+  /* --- Separator --- */
+  --color-separator-opaque: #2c2c2e;
+  --color-separator-nonopaque: rgba(246, 241, 231, 0.06);
+  --color-separator-strong: #424245;
+
+  /* --- Link / Accent --- */
+  --color-link: #9ec3f5;
+  --color-link-hover: #b4d2f8;
+  --color-link-pressed: #7aa8e8;
+  --color-link-visited: #b9b4f0;
+
+  /* --- System Colors --- */
+  --color-system-blue: #9ec3f5;
+  --color-system-green: #30d158;
+  --color-system-orange: #ff9f0a;
+  --color-system-red: #ff453a;
+  --color-system-purple: #bf5af2;
+  --color-system-yellow: #ffd60a;
+  --color-system-teal: #64d2ff;
+  --color-system-pink: #ff375f;
+
+  /* --- Timeline Track Colors --- */
+  --track-video: #31475f;
+  --track-video-border: #4a6a8a;
+  --track-original: #2b3a2f;
+  --track-original-border: #3d5a3f;
+  --track-voice: #4a3e6b;
+  --track-voice-border: #6a5a8a;
+  --track-voice-flagged: #6b4a2a;
+  --track-voice-flagged-border: #8a6a3a;
+  --track-voice-muted: rgba(74, 62, 107, 0.45);
+  --track-music: #5a3346;
+  --track-music-border: #7a4a5f;
+  --track-captions: #2d3a4a;
+  --track-captions-border: #3d5a6a;
+
+  /* --- Playhead --- */
+  --playhead-color: #ff453a;
+  --playhead-glow: rgba(255, 69, 58, 0.5);
+
+  /* ============================================================
+     HIGH CONTRAST VARIANT (prefers-contrast: more)
+     ============================================================ */
+  @media (prefers-contrast: more) {
+    :root {
+      --color-label-tertiary: #d9d2c3;
+      --color-label-quaternary: #c9c2b3;
+      --color-fill-primary: rgba(246, 241, 231, 0.15);
+      --color-fill-secondary: rgba(246, 241, 231, 0.1);
+      --color-fill-hover: rgba(246, 241, 231, 0.18);
+      --color-fill-pressed: rgba(246, 241, 231, 0.22);
+      --color-separator-opaque: #4a4a4d;
+      --color-separator-nonopaque: rgba(246, 241, 231, 0.12);
+      --color-separator-strong: #6a6a6d;
+      --glass-bg: rgba(22, 22, 23, 0.9);
+      --glass-bg-strong: rgba(22, 22, 23, 0.95);
+      --glass-border: rgba(255, 255, 255, 0.15);
+      --glass-border-strong: rgba(255, 255, 255, 0.2);
+    }
+  }
+
+  /* ============================================================
+     TYPOGRAPHY - Apple Text Styles (macOS)
+     ============================================================ */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Text Styles - Exact macOS specifications */
+  --text-large-title: 600 26px/32px var(--font-sans);
+  --text-title-1: 400 22px/26px var(--font-sans);
+  --text-title-2: 600 17px/22px var(--font-sans);
+  --text-title-3: 600 15px/20px var(--font-sans);
+  --text-headline: 700 13px/16px var(--font-sans);
+  --text-body: 400 13px/16px var(--font-sans);
+  --text-callout: 400 12px/15px var(--font-sans);
+  --text-subheadline: 400 11px/14px var(--font-sans);
+  --text-footnote: 400 10px/13px var(--font-sans);
+  --text-caption-1: 400 10px/13px var(--font-sans);
+  --text-caption-2: 500 10px/13px var(--font-sans);
+
+  /* Emphasized variants */
+  --text-headline-emph: 900 13px/16px var(--font-sans);
+  --text-body-emph: 600 13px/16px var(--font-sans);
+  --text-callout-emph: 600 12px/15px var(--font-sans);
+  --text-subheadline-emph: 600 11px/14px var(--font-sans);
+
+  /* Fluid type scale (respects user font size) */
+  --type-step--2: clamp(0.69rem, 0.65rem + 0.2vw, 0.75rem);   /* ~11px */
+  --type-step--1: clamp(0.75rem, 0.7rem + 0.25vw, 0.81rem);   /* ~12px */
+  --type-step-0:  clamp(0.81rem, 0.75rem + 0.3vw, 0.88rem);   /* ~13px */
+  --type-step-1:  clamp(0.88rem, 0.8rem + 0.4vw, 0.94rem);    /* ~14px */
+  --type-step-2:  clamp(0.94rem, 0.85rem + 0.45vw, 1rem);     /* ~15px */
+  --type-step-3:  clamp(1rem, 0.9rem + 0.5vw, 1.06rem);       /* ~16px */
+  --type-step-4:  clamp(1.06rem, 0.95rem + 0.55vw, 1.13rem);  /* ~17px */
+  --type-step-5:  clamp(1.13rem, 1rem + 0.65vw, 1.25rem);     /* ~20px */
+  --type-step-6:  clamp(1.31rem, 1.15rem + 0.8vw, 1.5rem);    /* ~24px */
+  --type-step-7:  clamp(1.5rem, 1.3rem + 1vw, 1.75rem);       /* ~28px */
+  --type-step-8:  clamp(1.88rem, 1.6rem + 1.4vw, 2.25rem);    /* ~36px */
+
+  /* ============================================================
+     SPACING - 4pt Base Unit
+     ============================================================ */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ============================================================
+     BORDER RADIUS
+     ============================================================ */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-full: 9999px;
+  --radius-pill: 9999px;
+
+  /* ============================================================
+     ELEVATION / SHADOWS
+     ============================================================ */
+  --shadow-0: none;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
+  --shadow-2: 0 4px 8px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-4: 0 24px 64px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glass: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-playhead: 0 0 12px var(--playhead-glow);
+
+  /* ============================================================
+     MOTION
+     ============================================================ */
+  --ease-standard: cubic-bezier(0.28, 0.11, 0.32, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0.38, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+  --duration-instant: 0ms;
+  --duration-fast: 100ms;
+  --duration-standard: 200ms;
+  --duration-emphasized: 300ms;
+  --duration-slow: 400ms;
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --duration-fast: 0.01ms;
+      --duration-standard: 0.01ms;
+      --duration-emphasized: 0.01ms;
+      --duration-slow: 0.01ms;
+    }
+  }
+
+  /* ============================================================
+     LAYOUT
+     ============================================================ */
+  --nav-height: 48px;
+  --toolbar-height: 44px;
+  --inspector-width: 320px;
+  --track-height: 44px;
+  --track-height-sm: 34px;
+  --ruler-height: 22px;
+  --page-max: 1024px;
+  --wide-max: 1240px;
+  --sidebar-width: 280px;
+
+  /* ============================================================
+     Z-INDEX
+     ============================================================ */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-nav: 20;
+  --z-toolbar: 25;
+  --z-dropdown: 30;
+  --z-modal-bg: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 80;
+  --z-tooltip: 90;
+}

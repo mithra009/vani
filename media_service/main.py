@@ -13,8 +13,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
-from .config import ALLOWED_ORIGINS, DATABASE_URL, MEDIA_API_PORT, SUPABASE_READY
+from .config import ALLOWED_ORIGINS, DATABASE_URL, MEDIA_API_PORT
 from .routes import router
+from .storage import storage_ready
+from .config import STORAGE_BACKEND
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("media.api")
@@ -25,7 +27,8 @@ async def lifespan(app: FastAPI):
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL must be set in .env (Supabase direct/session pooler).")
     app.state.pool = await db.connect()
-    log.info("media service ready (bucket configured: %s)", SUPABASE_READY)
+    await storage_ready()
+    log.info("media service ready (storage: %s)", STORAGE_BACKEND)
     yield
     await app.state.pool.close()
 

@@ -26,7 +26,7 @@ import soundfile as sf
 
 from backend.app import media as amedia
 from media_service import storage
-from . import chunking, db, export, keys, placement, providers
+from . import chunking, db, export, keys, placement, providers, ratelimit
 from .config import (
     CHUNK_LLM_ATTEMPTS, DEFAULT_CPS, EXPORT_TIMEOUT_SECONDS, JOB_MAX_ATTEMPTS, MAX_VIDEO_SECONDS, SCRIPT_GAP_S,
     WORKER_POLL_SECONDS, WORKER_REAP_SECONDS, WORKER_STALE_JOB_SECONDS, check_providers,
@@ -41,12 +41,11 @@ log = logging.getLogger("editor.worker")
 
 async def download(key: str, dst: Path) -> Path:
     try:
-        data = await asyncio.to_thread(storage.download, key)
+        size = await asyncio.to_thread(storage.download_to, key, str(dst))   # streamed, never all in RAM
     except Exception as e:
         raise StorageUnavailable(f"Couldn't read {key} from storage: {type(e).__name__}: {e}") from e
-    if not data:
+    if not size:
         raise MediaFailed(f"Stored file {key} is empty.")
-    dst.write_bytes(data)
     return dst
 
 
@@ -94,6 +93,7 @@ async def transcribe(pool, speech, project: dict, audio: Path, workdir: Path) ->
         f = await download(hit["storage_key"], workdir / "stt.json")
         log.info("stt cache hit %s", key[:12])
         return json.loads(f.read_text(encoding="utf-8"))["segments"]
+    await ratelimit.acquire(pool, "gnani_stt", owner)
     result = await speech.transcribe(audio, project["src_lang"])
     skey = keys.artifact_path(owner, "stt_json", key, "json")
     await upload_bytes(json.dumps(result, ensure_ascii=False).encode(), skey, "application/json", workdir)
@@ -101,11 +101,12 @@ async def transcribe(pool, speech, project: dict, audio: Path, workdir: Path) ->
     return result["segments"]
 
 
-async def cut_chunks(lang_llm, transcript: chunking.Transcript, lang: str) -> list[chunking.Chunk]:
+async def cut_chunks(pool, owner: str, lang_llm, transcript: chunking.Transcript, lang: str) -> list[chunking.Chunk]:
     """Ask Gemini; validate; retry once on invalid output; then fail with the reason."""
     last: OutputInvalid | None = None
     for attempt in range(1, CHUNK_LLM_ATTEMPTS + 1):
         try:
+            await ratelimit.acquire(pool, "gemini", owner)
             return chunking.validate(transcript, await lang_llm.chunk(transcript.text, lang))
         except OutputInvalid as e:
             last = e
@@ -113,10 +114,11 @@ async def cut_chunks(lang_llm, transcript: chunking.Transcript, lang: str) -> li
     raise OutputInvalid(f"Gemini couldn't chunk the text without changing it: {last}", "chunking_invalid")
 
 
-async def translate(lang_llm, chunks: list[chunking.Chunk], src: str, tgt: str) -> list[str]:
+async def translate(pool, owner: str, lang_llm, chunks: list[chunking.Chunk], src: str, tgt: str) -> list[str]:
     if src == tgt:
         return [c.text for c in chunks]
     items = [{"id": c.idx, "text": c.text} for c in chunks]
+    await ratelimit.acquire(pool, "gemini", owner)
     got = providers.validate_translation(items, await lang_llm.translate(items, src, tgt))
     return [got[c.idx] for c in chunks]
 
@@ -140,8 +142,9 @@ async def handle_generate(pool, job: dict, project: dict, workdir: Path) -> None
         if not transcript.text:
             raise InputInvalid("No speech was found in the audio.", "no_speech")
 
-    chunks = await cut_chunks(lang_llm, transcript, project["src_lang"])
-    texts = await translate(lang_llm, chunks, project["src_lang"], project["tgt_lang"])
+    owner = str(project["owner_id"])
+    chunks = await cut_chunks(pool, owner, lang_llm, transcript, project["src_lang"])
+    texts = await translate(pool, owner, lang_llm, chunks, project["src_lang"], project["tgt_lang"])
     anchors = (placement.place_script(chunks, duration, DEFAULT_CPS, SCRIPT_GAP_S)
                if project["input_kind"] == "script" else placement.place_speech(transcript, chunks))
 
@@ -179,6 +182,7 @@ async def handle_tts(pool, job: dict, project: dict, workdir: Path) -> None:
         audio_key, seconds = hit["storage_key"], float(hit["meta"]["duration_s"])
     else:
         speech, _ = providers.get()
+        await ratelimit.acquire(pool, "gnani_tts", owner)     # cache hits above never count
         data = await speech.tts(chunking.tts_text(chunk["text"], chunk["emotion_tag"]), voice, lang, float(chunk["speed"]))
         seconds = wav_seconds(data)
         audio_key = keys.artifact_path(owner, "chunk_wav", key, "wav")
@@ -330,6 +334,9 @@ async def process_one(pool) -> bool:
             await HANDLERS[job["kind"]](pool, job, project, Path(td))
         await db.finish_job(pool, job, outcome="DONE")
         log.info("job %s done in %.1fs", job["id"], time.monotonic() - started)
+    except ratelimit.Throttled as e:
+        await db.defer_job(pool, job, e.delay_s, str(e))
+        log.info("job %s deferred %.0fs: %s", job["id"], e.delay_s, e.reason)
     except Skip as e:
         await db.finish_job(pool, job, outcome="SKIPPED", error=str(e))
         log.info("job %s skipped: %s", job["id"], e)

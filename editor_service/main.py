@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from . import db
 from .config import ALLOWED_ORIGINS, DATABASE_URL, EDITOR_API_PORT, FAKE_PROVIDERS, check_providers
+from media_service.storage import storage_ready
 from .db import VersionConflict
 from .errors import EditorError
 from .routes import router
@@ -34,6 +35,7 @@ async def lifespan(app: FastAPI):
     app.state.pool = await db.connect()
     try:
         await db.check_schema(app.state.pool)
+        await storage_ready()
     except RuntimeError as e:
         log.error("%s", e)
         await app.state.pool.close()

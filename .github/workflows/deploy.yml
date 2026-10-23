@@ -1,0 +1,121 @@
+# CI/CD: test every push and pull request; deploy main to the EC2 server when tests pass.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   EC2_HOST      the server's public IP
+#   EC2_USER      ubuntu
+#   EC2_SSH_KEY   the full contents of your .pem file
+# The app's own secrets live only in /opt/vani/.env on the server, never in GitHub.
+
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false        # never cut a deploy off half-way
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/postgres
+      FAKE_PROVIDERS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System packages (ffmpeg, caption fonts)
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends ffmpeg fonts-noto-core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            media_service/requirements.txt
+            editor_service/requirements.txt
+            requirements-dev.txt
+
+      - name: Python dependencies
+        run: pip install -r backend/requirements.txt -r media_service/requirements.txt -r editor_service/requirements.txt -r requirements-dev.txt
+
+      - name: Editor + media services (incl. database, concurrency, rate-limit and memory tests)
+        run: python -m pytest editor_service/tests media_service/tests -q
+
+      - name: Dubbing backend
+        run: python -m pytest backend/tests -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm ci && npm run build
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy.pem
+          chmod 600 ~/.ssh/deploy.pem
+          ssh-keyscan -T 15 -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy code to the server
+        run: |
+          rsync -az --delete \
+            --exclude '.git/' --exclude '.env' --exclude '.venv/' --exclude 'node_modules/' \
+            --exclude 'frontend/dist/' --exclude 'storage/' --exclude '__pycache__/' --exclude '.agents/' \
+            -e "ssh -i ~/.ssh/deploy.pem" \
+            ./ "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/vani/"
+
+      - name: Build and restart
+        run: |
+          ssh -i ~/.ssh/deploy.pem "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" bash -se <<'EOF'
+          set -euo pipefail
+          cd /opt/vani
+          test -f .env || { echo "::error::/opt/vani/.env is missing on the server"; exit 1; }
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
+          docker image prune -f >/dev/null
+          EOF
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "http://${{ secrets.EC2_HOST }}/api/health" >/dev/null \
+               && curl -fsS "http://${{ secrets.EC2_HOST }}/api/editor/health" >/dev/null; then
+              echo "Healthy"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::App did not become healthy in 5 minutes"
+          ssh -i ~/.ssh/deploy.pem "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "cd /opt/vani && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps && docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail 50"
+          exit 1
+
+      - name: Remove key
+        if: always()
+        run: rm -f ~/.ssh/deploy.pem

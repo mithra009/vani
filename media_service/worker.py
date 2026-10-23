@@ -36,8 +36,7 @@ class Skip(Exception):
 # ------------------------------------------------------------------ handlers
 
 async def _download(key: str, dst: Path) -> None:
-    data = await asyncio.to_thread(storage.download, key)
-    dst.write_bytes(data)
+    await asyncio.to_thread(storage.download_to, key, str(dst))
 
 
 async def _upload(local: Path, key: str, content_type: str) -> None:
@@ -108,19 +107,9 @@ async def handle_cleanup(job: dict, workdir: Path) -> dict:
     prefix = job["storage_key"].rsplit("/", 1)[0]
     keys = [f"{prefix}/source{ext}" for ext in (".mp4", ".mov", ".webm", ".mkv")]
     keys += [f"{prefix}/thumb.jpg", f"{prefix}/proxy.mp4"]
-    # Remove only objects that exist (list the folder once). storage3 returns
-    # dicts, so read the name via [] with an attribute fallback.
-    folder = prefix
+    # Remove only objects that exist (list the folder once).
     try:
-        entries = await asyncio.to_thread(
-            lambda: storage.admin().storage.from_(storage.MEDIA_BUCKET).list(folder) or []
-        )
-        names = []
-        for e in entries:
-            name = e.get("name") if isinstance(e, dict) else getattr(e, "name", None)
-            if name:
-                names.append(name)
-        existing = [f"{folder}/{n}" for n in names]
+        existing = await asyncio.to_thread(storage.list_folder, prefix)
     except Exception as e:
         log.warning("cleanup list failed for %s: %s", prefix, e)
         existing = keys

@@ -17,6 +17,9 @@ supabase?.auth.onAuthStateChange((_event, session) => { token = session?.access_
 /** Current access token, or null when signed out. */
 export const accessToken = () => token;
 
+/** Manually set the access token (used after sign-in before onAuthStateChange fires). */
+export const setAccessToken = (newToken) => { token = newToken; };
+
 /** Append the token to URLs used by <video>, <audio>, <a download> and EventSource,
  *  which can't send an Authorization header. */
 export function withToken(url) {

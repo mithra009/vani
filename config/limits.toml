@@ -1,0 +1,30 @@
+# Vani limits: every app-side limit in one place.
+#
+# Edit, then restart the services (no rebuild needed: docker-compose mounts this file):
+#     docker compose -f docker-compose.yml -f docker-compose.prod.yml restart
+# An environment variable with the name in [brackets] overrides the value here.
+# Per-IP request limits live in frontend/nginx.conf (nginx can't read this file).
+
+[providers]
+# Calls per minute for the WHOLE app: one Gnani key and one Gemini key shared by every user.
+# Each active user (has jobs queued or running) gets an equal share, recomputed on every call:
+# 1 active user can use all of it, 4 active users get a quarter each.
+# Start conservative; raise once Gnani confirms your key's real limits. 0 = no limit.
+gnani_tts_per_min = 60        # [GNANI_TTS_RPM]   one call per chunk voiced (cached chunks are free)
+gnani_stt_per_min = 10         # [GNANI_STT_RPM]   one call per video/narration transcribed
+gemini_per_min    = 20        # [GEMINI_RPM]      chunking + translation, 1–2 calls per project
+
+[projects]
+max_per_user               = 10   # [MAX_PROJECTS_PER_USER]
+# Projects one user may be generating at once: this many when Vani is quiet, stepping down
+# to 1 per user once `busy_active_users` people are working.
+max_generating_per_user    = 3    # [MAX_ACTIVE_GENERATIONS]
+busy_active_users          = 10   # [BUSY_ACTIVE_USERS]
+max_queued_exports_per_user = 2   # [MAX_QUEUED_EXPORTS_PER_USER]
+
+[uploads]
+max_video_seconds  = 600          # [MAX_VIDEO_SECONDS]  10 minutes
+max_upload_mb      = 100        # [MAX_UPLOAD_BYTES is bytes; this file uses MB]
+max_videos_per_user = 10          # [ASSET_MAX_COUNT]
+max_storage_gb_per_user = 2       # [ASSET_MAX_TOTAL_BYTES is bytes; this file uses GB]
+max_narration_mb   = 100          # [MAX_NARRATION_BYTES is bytes]

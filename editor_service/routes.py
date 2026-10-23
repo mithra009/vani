@@ -40,7 +40,8 @@ from .chunking import ALLOWED
 from .config import (
     EVENTS_POLL_SECONDS, MAX_NARRATION_BYTES, MAX_SCRIPT_CHARS, TTS_SPEED_MAX, TTS_SPEED_MIN,
 )
-from .errors import Conflict, InputInvalid, NotFound
+from .errors import Conflict, InputInvalid, LimitReached, NotFound
+from .config import BUSY_ACTIVE_USERS, MAX_ACTIVE_GENERATIONS, MAX_PROJECTS_PER_USER
 from .providers import LANG_NAMES
 
 log = logging.getLogger("editor.routes")
@@ -154,9 +155,34 @@ async def list_projects(request: Request, user: User):
     return [public_project(p) for p in await db.list_projects(pool(request), user["id"])]
 
 
+def generation_cap(active_users: int) -> int:
+    """Projects one user may generate at once: MAX_ACTIVE_GENERATIONS when the app is quiet,
+    stepping down linearly to 1 once BUSY_ACTIVE_USERS people are working."""
+    if active_users <= 1:
+        return MAX_ACTIVE_GENERATIONS
+    if active_users >= BUSY_ACTIVE_USERS:
+        return 1
+    span = (MAX_ACTIVE_GENERATIONS - 1) * (BUSY_ACTIVE_USERS - active_users) / (BUSY_ACTIVE_USERS - 1)
+    return max(1, round(1 + span))
+
+
+async def check_user_limits(p, owner_id: str, *, new_project: bool) -> None:
+    n = await db.user_counts(p, owner_id)
+    if new_project and n["projects"] >= MAX_PROJECTS_PER_USER:
+        raise LimitReached(f"You've reached {MAX_PROJECTS_PER_USER} projects. Delete one to start another.")
+    cap = generation_cap(n["active_users"])
+    if n["generating"] >= cap:
+        raise LimitReached(f"You have {n['generating']} project(s) generating; the limit right now is {cap} at a time "
+                           "(it adapts to how busy Vani is). Try again when one finishes.")
+
+
 @router.post("/projects", status_code=201)
 async def create_project(request: Request, user: User, body: CreateProject):
     p = pool(request)
+    if body.input_kind != "narration":           # narration starts generating only after the take
+        await check_user_limits(p, user["id"], new_project=True)
+    elif (await db.user_counts(p, user["id"]))["projects"] >= MAX_PROJECTS_PER_USER:
+        raise LimitReached(f"You've reached {MAX_PROJECTS_PER_USER} projects. Delete one to start another.")
     asset = await db.asset_for_owner(p, str(body.asset_id), user["id"])
     if asset is None:
         raise NotFound("That video isn't in your Library.")
@@ -191,12 +217,13 @@ async def narration_init(request: Request, project_id: UUID, user: User, body: N
         raise Conflict("This project isn't waiting for a narration.")
     key = f"{user['id']}/projects/{project_id}/narration.{body.ext}"
     signed = await asyncio.to_thread(storage.create_signed_upload_url, key)
-    return {"uploadUrl": signed["url"], "token": signed["token"], "storageKey": key}
+    return {"uploadUrl": signed["url"], "token": signed["token"], "uploadMethod": signed.get("method", "supabase-put"), "storageKey": key}
 
 
 @router.post("/projects/{project_id}/narration/complete")
 async def narration_complete(request: Request, project_id: UUID, user: User, body: NarrationInit):
     key = f"{user['id']}/projects/{project_id}/narration.{body.ext}"
+    await check_user_limits(pool(request), user["id"], new_project=False)
     info = await asyncio.to_thread(storage.object_info, key)
     if info is None:
         raise InputInvalid("The narration hasn't finished uploading.", "narration_missing")

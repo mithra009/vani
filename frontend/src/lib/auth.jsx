@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { supabase } from "./supabase.js";
+import { supabase, setAccessToken } from "./supabase.js";
 import { authApi, setUnauthorizedHandler } from "./api.js";
 
 const AuthCtx = createContext(null);
@@ -44,6 +44,7 @@ export function AuthProvider({ children }) {
 
   const adopt = async ({ session, user }) => {
     await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
+    setAccessToken(session.access_token);
     setProfile(user);
     setAuthError(null);
     setStatus("signed_in");

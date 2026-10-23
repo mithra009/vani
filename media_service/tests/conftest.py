@@ -14,5 +14,8 @@ if str(ROOT) not in sys.path:
 
 os.environ["VANI_AUTH_DISABLED"] = "1"
 os.environ["DATABASE_URL"] = os.environ.get("DATABASE_URL_TEST", "")
+# Never touch real object storage from tests, whatever .env says (S3 tests use moto explicitly).
+os.environ["STORAGE_BACKEND"] = "supabase"
+os.environ["S3_BUCKET"] = ""
 
 import pytest  # noqa: E402

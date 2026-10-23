@@ -137,27 +137,34 @@ const real = {
 
 let impl = null;
 let mode = null;
+let initPromise = null;
 
 export async function initApi() {
   if (impl) return mode;
-  try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 1500);
-    const res = await fetch("/api/health", { signal: ctl.signal });
-    clearTimeout(t);
-    if (!res.ok || !res.headers.get("content-type")?.includes("json")) throw new Error();
-    impl = real;
-    mode = "live";
-  } catch {
-    impl = (await import("./mock.js")).mock;   // demo-only code, loaded only when needed
-    mode = "demo";
-  }
-  return mode;
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 1500);
+      const res = await fetch("/api/health", { signal: ctl.signal });
+      clearTimeout(t);
+      if (!res.ok || !res.headers.get("content-type")?.includes("json")) throw new Error();
+      impl = real;
+      mode = "live";
+    } catch {
+      impl = (await import("./mock.js")).mock;   // demo-only code, loaded only when needed
+      mode = "demo";
+    }
+    return mode;
+  })();
+  return initPromise;
 }
 
 export const api = new Proxy({}, {
   get: (_, key) => (...args) => {
-    if (!impl) throw new Error("initApi() must finish before using the API.");
+    if (!impl) {
+      return initApi().then(() => impl[key](...args));
+    }
     return impl[key](...args);
   },
 });

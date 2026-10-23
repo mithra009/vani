@@ -42,7 +42,11 @@ def subscribe(job_id: str) -> asyncio.Queue:
 
 
 def unsubscribe(job_id: str, q: asyncio.Queue) -> None:
-    _subscribers.get(job_id, set()).discard(q)
+    subs = _subscribers.get(job_id)
+    if subs is not None:
+        subs.discard(q)
+        if not subs:                       # don't keep an empty entry per project ever watched
+            _subscribers.pop(job_id, None)
 
 
 def enqueue(fn: Callable[[str], Awaitable[None]], job_id: str) -> None:
