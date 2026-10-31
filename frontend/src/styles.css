@@ -918,10 +918,30 @@ main { min-height: calc(100vh - var(--nav-h) - 72px); }
 .ne-row label { display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
 
 /* narration */
-.narr { display: flex; flex-direction: column; gap: 12px; max-width: 760px; }
-.narr-video { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--r-md); }
-.narr-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* One-take narration: video left (at its own shape, portrait or landscape), recording panel right. */
+.narr { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; padding-bottom: 40px; }
+.narr-stage { background: #0b0b0c; border-radius: var(--r-md); display: flex; align-items: center; justify-content: center;
+  height: min(70vh, 640px); overflow: hidden; }
+.narr-video { display: block; max-width: 100%; max-height: 100%; width: auto; height: 100%; background: #000; }
+.narr-video-empty { display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%; color: var(--text-3); font-size: 14px; }
+.narr-panel { display: grid; gap: 14px; padding: 22px; border-radius: 18px; background: var(--surface); border: 1px solid var(--hairline); }
+.narr-title { margin: 0; font-size: 19px; font-weight: 600; }
+.narr-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--text-2); }
+.narr-clock { display: flex; align-items: baseline; justify-content: space-between; padding: 12px 14px; border-radius: 12px;
+  background: var(--surface-2, #1c1c1e); }
+.narr-clock-label { font-size: 13px; color: var(--text-3); }
+.narr-clock-time { font-size: 24px; font-weight: 600; letter-spacing: 0.02em; }
+.narr-panel .bar { margin-top: -6px; }
+.narr-controls { display: grid; gap: 10px; }
+.narr-main { width: 100%; height: 44px; font-size: 16px; }
+.narr-row { display: flex; gap: 10px; }
+.narr-row .btn { flex: 1; }
 .narr-rec { color: var(--red); font-weight: 600; }
+.narr-tip { margin: 0; }
+@media (max-width: 900px) {
+  .narr { grid-template-columns: 1fr; }
+  .narr-stage { height: min(60vh, 520px); }
+}
 
 /* projects: editor list */
 .pj-editor { margin: 8px 0 24px; display: flex; flex-direction: column; gap: 6px; }

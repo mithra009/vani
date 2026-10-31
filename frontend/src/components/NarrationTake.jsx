@@ -82,26 +82,48 @@ export default function NarrationTake({ project }) {
     }
   }
 
+  const total = Number(project.duration_s) || 0;
+  const shown = state === "review" && take ? take.duration : elapsed;
+
   return (
     <div className="narr">
-      <p className="body-sm">Record the whole narration in one take. The video plays from the start, muted, while you speak.</p>
-      {src ? <video ref={video} src={src} playsInline className="narr-video" /> : <div className="narr-video tl-video-empty">Loading video…</div>}
-      <div className="narr-controls">
-        {state === "idle" && <button className="btn btn-primary" onClick={start} disabled={!src}>● Start recording</button>}
-        {state === "recording" && (
-          <><span className="narr-rec">● REC {clock(elapsed)}</span>
-            <button className="btn" onClick={() => rec.current?.stop()}>■ Stop</button></>
-        )}
-        {state === "review" && take && (
-          <>
-            <AudioPlayer src={take.url} label="Your take" onError={setErr} />
-            <button className="btn" onClick={() => { URL.revokeObjectURL(take.url); setTake(null); setState("idle"); }}>Record again</button>
-            <button className="btn btn-primary" onClick={submit}>Use this take</button>
-          </>
-        )}
-        {state === "uploading" && <span className="body-sm loader-inline"><Loader size={14} /> Uploading {Math.round(progress * 100)}%…</span>}
+      <div className="narr-stage">
+        {src ? <video ref={video} src={src} playsInline className="narr-video" />
+          : <div className="narr-video narr-video-empty"><Loader size={28} /> Loading video…</div>}
       </div>
-      {err && <div className="banner error" role="alert"><span className="banner-dot" /><span>{err}</span></div>}
+
+      <aside className="narr-panel" aria-label="Recording">
+        <h2 className="narr-title">Record your narration</h2>
+        <ol className="narr-steps">
+          <li>Press <b>Start recording</b>. The video plays from the start, muted.</li>
+          <li>Speak over it in one take. Recording stops when the video ends, or press Stop.</li>
+          <li>Listen back, then use the take or record again.</li>
+        </ol>
+
+        <div className={`narr-clock ${state === "recording" ? "on" : ""}`}>
+          <span className="narr-clock-label">{state === "recording" ? <span className="narr-rec">● REC</span> : state === "review" ? "Your take" : "Ready"}</span>
+          <span className="narr-clock-time mono">{clock(shown)}{total > 0 && <span className="dim"> / {clock(total)}</span>}</span>
+        </div>
+        {total > 0 && <div className="bar"><span style={{ width: `${Math.min(100, (shown / total) * 100)}%` }} /></div>}
+
+        <div className="narr-controls">
+          {state === "idle" && <button className="btn btn-primary narr-main" onClick={start} disabled={!src}>● Start recording</button>}
+          {state === "recording" && <button className="btn narr-main" onClick={() => rec.current?.stop()}>■ Stop</button>}
+          {state === "review" && take && (
+            <>
+              <AudioPlayer src={take.url} label="Your take" onError={setErr} />
+              <div className="narr-row">
+                <button className="btn" onClick={() => { URL.revokeObjectURL(take.url); setTake(null); setState("idle"); }}>Record again</button>
+                <button className="btn btn-primary" onClick={submit}>Use this take</button>
+              </div>
+            </>
+          )}
+          {state === "uploading" && <span className="body-sm loader-inline"><Loader size={14} /> Uploading {Math.round(progress * 100)}%…</span>}
+        </div>
+
+        <p className="caption narr-tip">Use headphones if you can, so the mic only hears you. Background noise is cleaned up afterwards.</p>
+        {err && <div className="banner error" role="alert"><span className="banner-dot" /><span>{err}</span></div>}
+      </aside>
     </div>
   );
 }

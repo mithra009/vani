@@ -53,7 +53,7 @@ const FEATURES = [
 
 const MODELS = [
   { name: "Prisma v2.5", role: "Speech to text", body: "Finds every spoken line and its exact timing, trained on over 14 million hours of Indian telephone audio. Handles Hinglish and other code-mixed speech." },
-  { name: "Timbre v2.5", role: "Text to speech", body: "42 natural voices across ten Indian languages, with audio tags for laughter, whispers and sighs, and correct reading of lakh and crore." },
+  { name: "Timbre v3.0", role: "Text to speech", body: "42 natural voices across ten Indian languages, with audio tags for laughter, whispers and sighs, and correct reading of lakh and crore." },
   { name: "Voice cloning", role: "Text to speech", body: "Builds a voice from 5 to 30 seconds of clean speech, so a creator can be heard in languages they don't speak." },
 ];
 

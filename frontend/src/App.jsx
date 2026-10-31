@@ -81,7 +81,7 @@ function Shell({ mode }) {
 
       <footer className="footer">
         <div className="footer-inner">
-          <span>Speech by Gnani Prisma v2.5 and Timbre v2.5. Translation by Gemini 3.5 Flash-Lite.</span>
+          <span>Speech by Gnani Prisma v2.5 and Timbre v3.0. Translation by Gemini 3.5 Flash-Lite.</span>
           <span>Only dub videos you own. Only clone voices with consent.</span>
         </div>
       </footer>

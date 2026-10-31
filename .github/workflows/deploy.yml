@@ -101,7 +101,10 @@ jobs:
           set -euo pipefail
           cd /opt/vani
           test -f .env || { echo "::error::/opt/vani/.env is missing on the server"; exit 1; }
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
+          DC="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+          $DC up -d --build --remove-orphans || {
+            echo "::error::A service failed to start. Its own log usually says why (e.g. a Supabase migration to apply):"
+            $DC ps; $DC logs --tail 40 editor-api media-api backend; exit 1; }
           docker image prune -f >/dev/null
           EOF
 

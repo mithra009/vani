@@ -10,7 +10,7 @@ export const TRANSCRIBE_STAGES = [
 const ALL_DUB_STAGES = {
   clean: { key: "clean", name: "Cleaning your recording", sub: "Noise reduced and loudness evened out" },
   translate: { key: "translate", name: "Translating", sub: "Each line written to fit its time slot" },
-  synthesize: { key: "synthesize", name: "Generating voice", sub: "Gnani Timbre v2.5 speaks each line with its emotion" },
+  synthesize: { key: "synthesize", name: "Generating voice", sub: "Gnani Timbre v3.0 speaks each line with its emotion" },
   fit: { key: "fit", name: "Fitting to timing", sub: "Every line adjusted to start and end on time" },
   assemble: { key: "assemble", name: "Building the soundtrack", sub: "Lines placed at their original timestamps" },
   mux: { key: "mux", name: "Finishing video", sub: "Mixing with the original audio" },
