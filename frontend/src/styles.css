@@ -274,9 +274,9 @@ input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit
 .loader { color: var(--blue); display: inline-block; vertical-align: -0.2em; margin-right: 6px; flex-shrink: 0; }
 .progress-wrap .loader, .pp-loading .loader, .stage-icon .loader, .ap-btn .loader, .pp-tbtn .loader, button[aria-label^="Pause"] .loader, button[aria-label^="Play"] .loader { display: block; margin-right: 0; }
 .pp-video-empty { display: flex; align-items: center; justify-content: center; gap: 4px; }
-.loader path { transform-box: fill-box; transform-origin: center; animation: loader-bar 1.8s ease-in-out infinite; }
+.loader path { transform-box: fill-box; transform-origin: center; animation: loader-bar 3s ease-in-out infinite; }
 @keyframes loader-bar { 0%, 60%, 100% { transform: scaleY(0.35); opacity: 0.5; } 30% { transform: scaleY(1); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .loader path { animation-duration: 3s; } }
+@media (prefers-reduced-motion: reduce) { .loader path { animation-duration: 4.5s; } }
 
 /* ---------- review ---------- */
 .review { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 28px; align-items: start; padding-bottom: 120px; }

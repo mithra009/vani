@@ -72,8 +72,11 @@ class Mem:
         async def set_stage(_, pid, stage):
             mem.stages.append(stage)
 
+        async def auto_fit(_, pid):
+            return 0
+
         for fn in (artifact_get, artifact_put, replace_chunks, chunk_generating, chunk_audio_ready,
-                   chunk_failed, fail_project, finish_job, claim_job, project_for_job, set_stage):
+                   chunk_failed, fail_project, finish_job, claim_job, project_for_job, set_stage, auto_fit):
             mp.setattr(db, fn.__name__, fn)
 
         async def download(key, dst: Path):

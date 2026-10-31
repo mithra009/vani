@@ -41,6 +41,7 @@ export default function ExportPanel({ project, chunks = [] }) {
   const [list, setList] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [preview, setPreview] = useState(null);      // { id, url } of the export playing inline
   const audioOnly = format === "mp3" || format === "wav";
 
   const refresh = () => editor.listExports(project.id).then(setList).catch((e) => setErr(`Couldn't load exports: ${e.message}`));
@@ -71,6 +72,12 @@ export default function ExportPanel({ project, chunks = [] }) {
       if (!url) throw new Error("No file to download.");
       window.open(url, "_blank", "noopener");
     } catch (x) { setErr(`Download failed: ${x.message}`); }
+  }
+
+  async function togglePreview(e) {
+    if (preview?.id === e.id) { setPreview(null); return; }
+    try { setPreview({ id: e.id, url: (await editor.exportUrl(project.id, e.id)).url }); }
+    catch (x) { setErr(`Preview failed: ${x.message}`); }
   }
 
   const notReady = project.status !== "editing";
@@ -157,12 +164,18 @@ export default function ExportPanel({ project, chunks = [] }) {
                       {e.status === "ready" && (
                         <>
                           {e.has_captions && <button className="btn btn-quiet btn-xs" onClick={() => download(e, "captions")}>Captions</button>}
+                          <button className="btn btn-quiet btn-xs" onClick={() => togglePreview(e)} aria-expanded={preview?.id === e.id}>
+                            {preview?.id === e.id ? "Hide preview" : "▶ Preview"}
+                          </button>
                           <button className="btn btn-primary btn-xs" onClick={() => download(e, "video")}>Download</button>
                         </>
                       )}
                       {e.status === "failed" && <span className="xp-pill xp-pill-failed">Failed</span>}
                     </div>
                   </div>
+                  {preview?.id === e.id && (e.format === "mp3" || e.format === "wav"
+                    ? <audio className="xp-preview-audio" src={preview.url} controls autoPlay />
+                    : <video className="xp-preview" src={preview.url} controls autoPlay playsInline />)}
                   {e.status === "failed" && <p className="xp-item-error">{e.error_message}</p>}
                   {e.warnings?.length > 0 && (
                     <button className="export-warn-btn xp-warn" aria-expanded={openWarn === e.id}

@@ -46,6 +46,12 @@ export const VOICES = [
   V("Harshad", "Male", "Professional, firm"),
 ];
 
+// Timbre v3.0 audio tags a chunk can be voiced with ("neutral" = no tag).
+export const EMOTION_TAGS = [
+  "neutral", "laugh", "giggle", "sigh", "exhales", "sniffles", "whispers", "shouting", "excited",
+  "slow", "pauses", "coughs", "yawns", "clears throat",
+];
+
 export const EMOTIONS = {
   neutral:  { label: "Neutral" },
   happy:    { label: "Happy" },

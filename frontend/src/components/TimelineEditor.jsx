@@ -11,6 +11,7 @@ import { durationT, layout, videoLayout } from "../lib/timeline.js";
 import { useTimeline } from "../lib/useTimeline.js";
 import { PreviewEngine } from "../lib/preview.js";
 import { clock } from "../lib/format.js";
+import { EMOTION_TAGS } from "../lib/catalog.js";
 
 const FLAG_TEXT = {
   overlap: "Overlaps another voice clip", past_end: "Runs past the end of the video (cut at export)",
@@ -593,6 +594,58 @@ function Section({ title, children }) {
   return <section className="pp-sec"><h4 className="pp-sec-title">{title}</h4>{children}</section>;
 }
 
+// Text / emotion / speed of one chunk: the same edit as the Chunks tab (both read the live chunk,
+// so a save on either side shows on the other). Keyed by revision, so it resets after each re-voice.
+function ChunkContent({ chunk, project, setErr }) {
+  const [text, setText] = useState(chunk.text);
+  const [emotion, setEmotion] = useState(chunk.emotion_tag);
+  const [speed, setSpeed] = useState(String(Number(chunk.speed)));
+  const [saving, setSaving] = useState(false);
+  const changes = {};
+  if (text.trim() !== chunk.text) changes.text = text.trim();
+  if (emotion !== chunk.emotion_tag) changes.emotion_tag = emotion;
+  if (parseFloat(speed) !== Number(chunk.speed)) changes.speed = parseFloat(speed);
+  const dirty = Object.keys(changes).length > 0;
+  const busy = saving || chunk.status !== "ready";
+
+  async function save() {
+    const s = changes.speed;
+    if (s !== undefined && !(s >= 0.5 && s <= 2)) { setErr("Speed must be between 0.5 and 2."); return; }
+    if (changes.text === "") { setErr("The text can't be empty."); return; }
+    setSaving(true); setErr(null);
+    try { await editor.editChunk(project.id, chunk.id, chunk.revision, changes); }
+    catch (e) { setErr(e.message); setSaving(false); }
+  }
+
+  return (
+    <>
+      <textarea className="pp-textarea" rows={3} value={text} onChange={(e) => setText(e.target.value)} disabled={busy}
+                aria-label="Chunk text" />
+      <label className="pp-field">
+        <span className="pp-field-label">Emotion</span>
+        <span className="pp-field-input">
+          <select value={emotion} onChange={(e) => setEmotion(e.target.value)} disabled={busy}>
+            {!EMOTION_TAGS.includes(emotion) && <option value={emotion}>{emotion}</option>}
+            {EMOTION_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </span>
+      </label>
+      <label className="pp-field">
+        <span className="pp-field-label">Speed</span>
+        <span className="pp-field-input">
+          <input type="number" min={0.5} max={2} step={0.05} value={speed} onChange={(e) => setSpeed(e.target.value)} disabled={busy} />
+          <span className="pp-unit">×</span>
+        </span>
+      </label>
+      <div className="pp-actions">
+        <button className="pp-btn pp-btn-primary" onClick={save} disabled={!dirty || busy}>
+          {chunk.status !== "ready" ? <><Loader size={12} /> Voicing…</> : saving ? "Saving…" : "Save and re-voice"}
+        </button>
+      </div>
+    </>
+  );
+}
+
 function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media, setErr }) {
   const [busy, setBusy] = useState(false);
   if (!sel) {
@@ -661,8 +714,11 @@ function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media,
     return (
       <>
         <div className="pp-subject"><span className="pp-chip pp-chip-voice">A2</span> Voice · chunk {c.idx + 1}</div>
-        <p className="pp-quote">{c.text}</p>
         {p?.flags.map((f) => <p key={f} className="pp-warn">⚠ {FLAG_TEXT[f]}</p>)}
+        {c.fit_note && <p className={c.fit_note.startsWith("Still") ? "pp-warn" : "pp-note"}>⚡ {c.fit_note}</p>}
+        <Section title="Content">
+          <ChunkContent key={`${c.id}:${c.revision}`} chunk={c} project={project} setErr={setErr} />
+        </Section>
         <Section title="Timing">
           {vc.detached_t == null
             ? num("Offset", vc.offset, (v) => set({ offset: v }), { min: -30, max: 30, unit: "s" })

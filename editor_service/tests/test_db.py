@@ -277,3 +277,60 @@ def test_split_and_merge_keep_order_and_regenerate():
         finally:
             await pool.close()
     run(go())
+
+
+def test_auto_fit_speeds_up_overlapping_pairs_in_three_steps_then_gives_up():
+    from editor_service import db
+
+    async def go():
+        pool = await fresh_pool()
+        try:
+            p = await new_project(pool)
+            pid = str(p["id"])
+            c0, c1 = await db.replace_chunks(pool, pid, OWNER, ROWS, 6.0)
+
+            async def voice_all(seconds):                      # both voiced; c0 (at 0.0) runs into c1 (at 0.8)
+                for c in await db.list_chunks(pool, pid, OWNER):
+                    assert await db.chunk_audio_ready(pool, c["id"], c["revision"], "k", seconds)
+
+            await voice_all(1.5)
+            speeds = []
+            for _ in range(3):
+                assert await db.auto_fit(pool, pid) == 2           # both chunks of the pair, equally
+                cs = await db.list_chunks(pool, pid, OWNER)
+                assert {c["status"] for c in cs} == {"pending"}
+                assert len({float(c["speed"]) for c in cs}) == 1
+                speeds.append(float(cs[0]["speed"]))
+                await voice_all(1.5)                               # still too long
+            assert speeds == [1.15, 1.25, 1.3]
+            assert await db.auto_fit(pool, pid) == 0               # gives up and says so
+            cs = await db.list_chunks(pool, pid, OWNER)
+            assert all(c["fit_note"] == "Still overlaps at 1.30× after 3 speed-ups" for c in cs)
+
+            # The user's edit wins: the automatic speed-up is undone.
+            e = await db.edit_chunk(pool, pid, OWNER, str(c0["id"]), cs[0]["revision"], {"text": "Hi."})
+            assert (float(e["speed"]), e["fit_step"], e["fit_note"]) == (1.0, 0, None)
+        finally:
+            await pool.close()
+    run(go())
+
+
+def test_auto_fit_stops_once_the_overlap_is_gone():
+    from editor_service import db
+
+    async def go():
+        pool = await fresh_pool()
+        try:
+            pid = str((await new_project(pool))["id"])
+            await db.replace_chunks(pool, pid, OWNER, ROWS, 6.0)
+            for c in await db.list_chunks(pool, pid, OWNER):
+                await db.chunk_audio_ready(pool, c["id"], c["revision"], "k", 1.0)
+            assert await db.auto_fit(pool, pid) == 2
+            for c in await db.list_chunks(pool, pid, OWNER):
+                await db.chunk_audio_ready(pool, c["id"], c["revision"], "k", 0.7)   # fits now
+            assert await db.auto_fit(pool, pid) == 0
+            cs = await db.list_chunks(pool, pid, OWNER)
+            assert all(c["fit_step"] == 1 and c["fit_note"] == "Sped up to 1.15× to avoid an overlap" for c in cs)
+        finally:
+            await pool.close()
+    run(go())

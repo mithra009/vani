@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import * as editor from "../lib/editorApi.js";
 import { api } from "../lib/api.js";
-import { TARGET_LANGS, VOICES, langName, voicesFor } from "../lib/catalog.js";
+import { EMOTION_TAGS, TARGET_LANGS, VOICES, langName, voicesFor } from "../lib/catalog.js";
 import { clock } from "../lib/format.js";
 import TimelineEditor from "../components/TimelineEditor.jsx";
 import ExportPanel from "../components/ExportPanel.jsx";
@@ -27,10 +27,6 @@ const CHUNK_STATUS = {
   failed: { label: "Failed", cls: "chunk-failed" },
 };
 
-const EMOTION_TAGS = [
-  "neutral", "laugh", "giggle", "sigh", "exhales", "sniffles", "whispers", "shouting", "excited",
-  "slow", "pauses", "coughs", "yawns", "clears throat",
-];
 
 export default function EditorProject() {
   const { id } = useParams();
@@ -391,6 +387,8 @@ function ChunkRow({ chunk, project }) {
       )}
       {chunk.emotion_tag && chunk.emotion_tag !== "neutral" && <span className="chunk-tag">{chunk.emotion_tag}</span>}
       {Number(chunk.speed) !== 1 && <span className="chunk-tag mono">{Number(chunk.speed).toFixed(2)}×</span>}
+      {chunk.fit_note && <span className={`chunk-tag ${chunk.fit_note.startsWith("Still") ? "chunk-tag-warn" : ""}`} title={chunk.fit_note}>
+        ⚡ {chunk.fit_note.startsWith("Still") ? "Still overlaps" : "Auto sped up"}</span>}
       {chunk.overflow && <span className="editor-chunk-overflow" title="Placed past the end of the video">Past video end</span>}
     </>
   );

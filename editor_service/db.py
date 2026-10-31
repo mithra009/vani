@@ -22,6 +22,8 @@ from .errors import Conflict, NotFound
 log = logging.getLogger("editor.db")
 
 ACTIVE_CHUNK = ("pending", "generating")
+# Clears automatic overlap speed-ups and restores the speed the chunk had before them.
+_FIT_RESET = "speed = coalesce(fit_base_speed, speed), fit_step = 0, fit_base_speed = null, fit_note = null"
 
 
 def _row(r: asyncpg.Record | None) -> dict | None:
@@ -149,7 +151,8 @@ async def set_voice(pool: asyncpg.Pool, project_id: str, owner_id: str, voice: d
             await get_project(conn, project_id, owner_id)
             raise Conflict("The project changed since you loaded it, or isn't ready for a voice change. Reload and try again.")
         chunks = await conn.fetch(
-            "update chunks set revision = revision + 1, status = 'pending', error_code = null, error_message = null "
+            "update chunks set revision = revision + 1, status = 'pending', error_code = null, error_message = null, "
+            f"  {_FIT_RESET} "
             "where project_id = $1 returning id, revision",
             project_id,
         )
@@ -236,11 +239,13 @@ async def edit_chunk(pool: asyncpg.Pool, project_id: str, owner_id: str, chunk_i
     if not changes or set(changes) - allowed:
         raise ValueError(f"Editable fields are {sorted(allowed)}.")
     sets = ", ".join(f"{k} = ${i + 5}" for i, k in enumerate(changes))
+    # The user's edit wins over automatic overlap speed-ups: undo them unless they set a speed.
+    fit = "fit_step = 0, fit_base_speed = null, fit_note = null" if "speed" in changes else _FIT_RESET
     async with pool.acquire() as conn, conn.transaction():
         await _lock_project(conn, project_id)
         c = await conn.fetchrow(
             f"update chunks set {sets}, revision = revision + 1, status = 'pending', "
-            "  error_code = null, error_message = null "
+            f"  error_code = null, error_message = null, {fit} "
             "where id = $1 and project_id = $2 and owner_id = $3 and revision = $4 returning *",
             chunk_id, project_id, owner_id, revision, *changes.values(),
         )
@@ -307,6 +312,48 @@ async def chunk_failed(pool: asyncpg.Pool, chunk_id: str, revision: int, code: s
         )
         if c is not None:
             await settle_project(conn, c["project_id"])
+
+
+# Overlap auto-fit: total speed-up over the chunk's own speed after each step (+0.15, +0.10, +0.05).
+FIT_STEPS = (0.15, 0.25, 0.30)
+
+
+async def auto_fit(pool: asyncpg.Pool, project_id: str) -> int:
+    """Once every chunk is voiced, re-voice both chunks of each overlapping pair a step faster.
+    After the last step an overlap is left as it is and the chunk says so. → chunks re-queued."""
+    from . import timeline                              # pure module; imported here to keep db.py's deps flat
+    async with pool.acquire() as conn, conn.transaction():
+        await _lock_project(conn, project_id)
+        p = await conn.fetchrow("select owner_id, status from editor_projects where id = $1", project_id)
+        if p is None or p["status"] != "editing":
+            return 0
+        owner = str(p["owner_id"])
+        chunks = await list_chunks(conn, project_id, owner)
+        tl = await get_timeline(conn, project_id, owner, timeline.default_doc)
+        placed, _ = timeline.layout(tl["doc"], [dict(c, id=str(c["id"])) for c in chunks if c["status"] == "ready"])
+        overlapping = {x.chunk_id for x in placed if "overlap" in x.flags}
+        queued = 0
+        for c in chunks:
+            if str(c["id"]) not in overlapping:
+                continue
+            step = c["fit_step"]
+            if step >= len(FIT_STEPS):
+                if not (c["fit_note"] or "").startswith("Still"):
+                    await conn.execute("update chunks set fit_note = $2 where id = $1", c["id"],
+                                       f"Still overlaps at {float(c['speed']):.2f}× after {len(FIT_STEPS)} speed-ups")
+                continue
+            base = float(c["fit_base_speed"] if c["fit_base_speed"] is not None else c["speed"])
+            speed = round(min(2.0, base + FIT_STEPS[step]), 3)
+            r = await conn.fetchrow(
+                "update chunks set speed = $2, fit_step = $3, fit_base_speed = $4, fit_note = $5, "
+                "  revision = revision + 1, status = 'pending' where id = $1 returning revision",
+                c["id"], speed, step + 1, base, f"Sped up to {speed:.2f}× to avoid an overlap",
+            )
+            await _enqueue_tts(conn, project_id, owner, c["id"], r["revision"])
+            queued += 1
+        if queued:
+            await conn.execute("update editor_projects set status = 'generating' where id = $1", project_id)
+        return queued
 
 
 async def chunk_generating(pool: asyncpg.Pool, chunk_id: str, revision: int) -> dict | None:
@@ -461,6 +508,7 @@ REQUIRED_SCHEMA = {
 REQUIRED_COLUMNS = {
     ("editor_jobs", "export_id"): "006_editor_exports.sql",
     ("editor_projects", "stage"): "008_project_stage.sql",
+    ("chunks", "fit_step"): "010_chunk_auto_fit.sql",
 }
 
 

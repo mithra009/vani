@@ -213,6 +213,8 @@ async def handle_tts(pool, job: dict, project: dict, workdir: Path) -> None:
         await db.artifact_put(pool, owner, key, "chunk_wav", audio_key, {"duration_s": round(seconds, 3)})
     if not await db.chunk_audio_ready(pool, chunk["id"], job["chunk_revision"], audio_key, round(seconds, 3)):
         raise Skip(f"chunk {chunk['id']} was edited while its audio was generating")
+    if n := await db.auto_fit(pool, job["project_id"]):          # no-op until the last chunk is voiced
+        log.info("project %s: %d overlapping chunk(s) re-queued faster", job["project_id"], n)
 
 
 # ------------------------------------------------------------------ export

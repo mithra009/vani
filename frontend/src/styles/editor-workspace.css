@@ -471,3 +471,17 @@ body.editor-compact .ed-page.ed-page-fixed { height: 100vh; height: 100dvh; }
   .ed-head-row .ed-head-main { flex-basis: 100%; }
   .ed-head-compact .ed-compact-title { flex: 1; min-width: 0; }
 }
+
+/* Chunk content editing in Effect Controls */
+.pp-textarea { width: 100%; box-sizing: border-box; margin: 0 0 6px; padding: 6px 8px; border-radius: 5px; border: 1px solid #3a3a3d;
+  background: #161617; color: var(--pp-text, #e8e6e1); font: 13px/1.45 inherit; resize: vertical; min-height: 56px; }
+.pp-textarea:focus { outline: none; border-color: var(--pp-accent); }
+.pp-field-input select { height: 26px; padding: 0 6px; border-radius: 5px; border: 1px solid #3a3a3d; background: #161617;
+  color: var(--pp-text, #e8e6e1); font-size: 13px; max-width: 150px; }
+.pp-btn-primary { background: var(--pp-accent); border-color: var(--pp-accent); color: #0b0b0c; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.pp-btn-primary:hover:not(:disabled) { background: var(--pp-accent); filter: brightness(1.1); }
+.chunk-tag-warn { color: #ffc27a; }
+
+/* Export list: inline preview of a finished file */
+.xp-preview { display: block; width: 100%; max-height: 60vh; margin-top: 10px; border-radius: 8px; background: #000; }
+.xp-preview-audio { display: block; width: 100%; margin-top: 10px; }
