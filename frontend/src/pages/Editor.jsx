@@ -370,6 +370,13 @@ function ChunkRow({ chunk, project }) {
     setBusy(false);
   }
 
+  async function remove() {
+    if (!window.confirm(`Delete chunk ${chunk.idx + 1}? Its voice and caption are removed. This can't be undone.`)) return;
+    setBusy(true); setErr(null);
+    try { await editor.deleteChunk(project.id, chunk); }        // the live update drops the row
+    catch (e) { setErr(e.message); setBusy(false); }
+  }
+
   async function regen() {
     setBusy(true); setErr(null);
     try { await editor.regenerateChunk(project.id, chunk.id); }
@@ -417,6 +424,10 @@ function ChunkRow({ chunk, project }) {
           <button className="btn btn-quiet btn-xs" onClick={() => setEditing((e) => !e)} disabled={busy}>
             {editing ? "Cancel" : "Edit"}
           </button>
+          {!editing && (
+            <button className="btn btn-quiet btn-xs ck-delete" onClick={remove} disabled={busy}
+                    aria-label={`Delete chunk ${chunk.idx + 1}`} title="Delete this chunk">Delete</button>
+          )}
         </div>
       </div>
 

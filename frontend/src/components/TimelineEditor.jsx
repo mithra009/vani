@@ -231,6 +231,16 @@ export default function TimelineEditor({ project, chunks }) {
     if (!sel) return;
     if (sel.kind === "video" && doc.video.length > 1) { tl.run([{ type: "video.delete", clip_id: sel.id }]); setSel(null); }
     else if (sel.kind === "music") { tl.run([{ type: "music.delete", clip_id: sel.id }]); setSel(null); }
+    else if (sel.kind === "voice") removeChunk(sel.id);
+  }
+
+  // A voice clip is a chunk: deleting it removes the chunk itself (same as Delete in the Chunks tab).
+  async function removeChunk(chunkId) {
+    const c = chunks.find((x) => String(x.id) === String(chunkId));
+    if (!c || !window.confirm(`Delete chunk ${c.idx + 1}? Its voice and caption are removed. This can't be undone.`)) return;
+    setErr(null);
+    try { await editor.deleteChunk(project.id, c); setSel(null); }
+    catch (e) { setErr(e.message); }
   }
 
   function startResize(e) {
@@ -271,7 +281,7 @@ export default function TimelineEditor({ project, chunks }) {
         <section className="pp-panel pp-controls" aria-label="Effect Controls">
           <header className="pp-head"><span className="pp-tab">Effect Controls</span></header>
           <div className="pp-body">
-            <Inspector sel={sel} setSel={setSel} doc={doc} tl={tl} placed={placed} byId={byId} chunks={chunks}
+            <Inspector sel={sel} setSel={setSel} doc={doc} tl={tl} placed={placed} byId={byId} chunks={chunks} onDelete={removeChunk}
                        project={project} media={media} setErr={setErr} />
           </div>
         </section>
@@ -660,7 +670,7 @@ function ChunkContent({ chunk, project, setErr }) {
   );
 }
 
-function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media, setErr }) {
+function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media, setErr, onDelete }) {
   const [busy, setBusy] = useState(false);
   if (!sel) {
     return (
@@ -759,6 +769,8 @@ function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media,
             <button className="pp-btn" disabled={busy || !next || c.status !== "ready" || next.status !== "ready"}
                     title="Merge with the next chunk; re-voiced as one"
                     onClick={() => contentOp(async () => { await editor.mergeChunks(project.id, c, next); setSel(null); })}>Merge with next</button>
+            <button className="pp-btn pp-btn-danger" disabled={busy} title="Delete this chunk (Del)"
+                    onClick={() => onDelete(c.id)}>Delete chunk</button>
           </div>
         </Section>
       </>

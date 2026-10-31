@@ -307,9 +307,9 @@ def test_auto_fit_speeds_up_overlapping_pairs_in_three_steps_then_gives_up():
             cs = await db.list_chunks(pool, pid, OWNER)
             assert all(c["fit_note"] == "Still overlaps at 1.30× after 3 speed-ups" for c in cs)
 
-            # The user's edit wins: the automatic speed-up is undone.
+            # A user edit hands the chunk to the user: it keeps its speed, loses the note, and is locked.
             e = await db.edit_chunk(pool, pid, OWNER, str(c0["id"]), cs[0]["revision"], {"text": "Hi."})
-            assert (float(e["speed"]), e["fit_step"], e["fit_note"]) == (1.0, 0, None)
+            assert (float(e["speed"]), e["fit_step"], e["fit_note"]) == (1.3, -1, None)
         finally:
             await pool.close()
     run(go())
@@ -331,6 +331,53 @@ def test_auto_fit_stops_once_the_overlap_is_gone():
             assert await db.auto_fit(pool, pid) == 0
             cs = await db.list_chunks(pool, pid, OWNER)
             assert all(c["fit_step"] == 1 and c["fit_note"] == "Sped up to 1.15× to avoid an overlap" for c in cs)
+        finally:
+            await pool.close()
+    run(go())
+
+
+def test_a_speed_the_user_sets_is_final_even_with_an_overlap():
+    from editor_service import db
+
+    async def go():
+        pool = await fresh_pool()
+        try:
+            pid = str((await new_project(pool))["id"])
+            c0, _ = await db.replace_chunks(pool, pid, OWNER, ROWS, 6.0)
+            e = await db.edit_chunk(pool, pid, OWNER, str(c0["id"]), c0["revision"], {"speed": 0.9})
+            for c in await db.list_chunks(pool, pid, OWNER):          # both voiced long enough to overlap
+                await db.chunk_audio_ready(pool, c["id"], c["revision"], "k", 1.5)
+            assert await db.auto_fit(pool, pid) == 0                   # first generation is over: nothing re-voiced
+            cs = {str(c["id"]): c for c in await db.list_chunks(pool, pid, OWNER)}
+            assert float(cs[str(c0["id"])]["speed"]) == 0.9 and cs[str(c0["id"])]["fit_step"] == -1
+            assert all(c["fit_note"] is None and c["status"] == "ready" for c in cs.values())
+            assert e["fit_step"] == -1
+        finally:
+            await pool.close()
+    run(go())
+
+
+def test_delete_chunk_renumbers_and_keeps_at_least_one():
+    from editor_service import db
+    from editor_service.errors import Conflict
+
+    async def go():
+        pool = await fresh_pool()
+        try:
+            pid = str((await new_project(pool))["id"])
+            c0, c1 = await db.replace_chunks(pool, pid, OWNER, ROWS, 6.0)
+            await db.chunk_audio_ready(pool, c1["id"], c1["revision"], "k", 0.5)   # c1 voiced, c0 still pending
+            assert (await db.get_project(pool, pid, OWNER))["status"] == "generating"
+            with pytest.raises(Conflict):
+                await db.delete_chunk(pool, pid, OWNER, str(c0["id"]), 99)          # stale revision
+            await db.delete_chunk(pool, pid, OWNER, str(c0["id"]), c0["revision"])
+            left = await db.list_chunks(pool, pid, OWNER)
+            assert [(str(c["id"]), c["idx"]) for c in left] == [(str(c1["id"]), 0)]
+            assert not await pool.fetchval("select count(*) from editor_jobs where chunk_id = $1", c0["id"])
+            # c0 was the only chunk still voicing, so deleting it settles the project.
+            assert (await db.get_project(pool, pid, OWNER))["status"] == "editing"
+            with pytest.raises(Conflict):
+                await db.delete_chunk(pool, pid, OWNER, str(c1["id"]), c1["revision"])  # the last one stays
         finally:
             await pool.close()
     run(go())

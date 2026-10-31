@@ -23,7 +23,10 @@ log = logging.getLogger("editor.db")
 
 ACTIVE_CHUNK = ("pending", "generating")
 # Clears automatic overlap speed-ups and restores the speed the chunk had before them.
-_FIT_RESET = "speed = coalesce(fit_base_speed, speed), fit_step = 0, fit_base_speed = null, fit_note = null"
+# Auto-fit runs only on a project's first generation. Any user edit (text, emotion, speed, split,
+# merge, voice) hands the chunk to the user: fit_step = -1 and auto-fit never changes it again, even
+# if it overlaps. Its current speed stays (the user's, or what auto-fit had reached).
+_FIT_LOCK = "fit_step = -1, fit_base_speed = null, fit_note = null"
 
 
 def _row(r: asyncpg.Record | None) -> dict | None:
@@ -152,7 +155,7 @@ async def set_voice(pool: asyncpg.Pool, project_id: str, owner_id: str, voice: d
             raise Conflict("The project changed since you loaded it, or isn't ready for a voice change. Reload and try again.")
         chunks = await conn.fetch(
             "update chunks set revision = revision + 1, status = 'pending', error_code = null, error_message = null, "
-            f"  {_FIT_RESET} "
+            f"  {_FIT_LOCK} "
             "where project_id = $1 returning id, revision",
             project_id,
         )
@@ -239,8 +242,7 @@ async def edit_chunk(pool: asyncpg.Pool, project_id: str, owner_id: str, chunk_i
     if not changes or set(changes) - allowed:
         raise ValueError(f"Editable fields are {sorted(allowed)}.")
     sets = ", ".join(f"{k} = ${i + 5}" for i, k in enumerate(changes))
-    # The user's edit wins over automatic overlap speed-ups: undo them unless they set a speed.
-    fit = "fit_step = 0, fit_base_speed = null, fit_note = null" if "speed" in changes else _FIT_RESET
+    fit = _FIT_LOCK                                   # the user's edit is final; auto-fit leaves it alone
     async with pool.acquire() as conn, conn.transaction():
         await _lock_project(conn, project_id)
         c = await conn.fetchrow(
@@ -319,8 +321,9 @@ FIT_STEPS = (0.15, 0.25, 0.30)
 
 
 async def auto_fit(pool: asyncpg.Pool, project_id: str) -> int:
-    """Once every chunk is voiced, re-voice both chunks of each overlapping pair a step faster.
-    After the last step an overlap is left as it is and the chunk says so. → chunks re-queued."""
+    """First generation only: once every chunk is voiced, re-voice both chunks of each overlapping
+    pair a step faster. After the last step an overlap is left as it is and the chunk says so.
+    Stops for good once the user edits any chunk. → chunks re-queued."""
     from . import timeline                              # pure module; imported here to keep db.py's deps flat
     async with pool.acquire() as conn, conn.transaction():
         await _lock_project(conn, project_id)
@@ -329,6 +332,8 @@ async def auto_fit(pool: asyncpg.Pool, project_id: str) -> int:
             return 0
         owner = str(p["owner_id"])
         chunks = await list_chunks(conn, project_id, owner)
+        if any(c["fit_step"] < 0 for c in chunks):     # the user has started editing: first generation is over
+            return 0
         tl = await get_timeline(conn, project_id, owner, timeline.default_doc)
         placed, _ = timeline.layout(tl["doc"], [dict(c, id=str(c["id"])) for c in chunks if c["status"] == "ready"])
         overlapping = {x.chunk_id for x in placed if "overlap" in x.flags}
@@ -337,6 +342,8 @@ async def auto_fit(pool: asyncpg.Pool, project_id: str) -> int:
             if str(c["id"]) not in overlapping:
                 continue
             step = c["fit_step"]
+            if step < 0:                                  # edited by the user: theirs, overlap or not
+                continue
             if step >= len(FIT_STEPS):
                 if not (c["fit_note"] or "").startswith("Still"):
                     await conn.execute("update chunks set fit_note = $2 where id = $1", c["id"],
@@ -631,7 +638,7 @@ async def _ordered_ids(conn, project_id: str) -> list:
 async def _after_content_change(conn, project_id: str, owner_id: str, chunk_ids: list) -> list[dict]:
     out = []
     for cid in chunk_ids:
-        r = await conn.fetchrow("select * from chunks where id = $1", cid)
+        r = await conn.fetchrow(f"update chunks set {_FIT_LOCK} where id = $1 returning *", cid)
         await _enqueue_tts(conn, project_id, owner_id, r["id"], r["revision"])
         out.append(_row(r))
     await conn.execute("update editor_projects set status = 'generating' where id = $1 and status = 'editing'", project_id)
@@ -682,6 +689,24 @@ async def split_chunk(pool: asyncpg.Pool, project_id: str, owner_id: str, chunk_
         order.insert(order.index(c["id"]) + 1, new["id"])
         await _pack(conn, project_id, order)
         return await _after_content_change(conn, project_id, owner_id, [c["id"], new["id"]])
+
+
+async def delete_chunk(pool: asyncpg.Pool, project_id: str, owner_id: str, chunk_id: str, revision: int) -> None:
+    """Remove a chunk (its voice, caption and queued jobs go with it); the rest are renumbered.
+    The last chunk can't go: a project always has something to voice."""
+    async with pool.acquire() as conn, conn.transaction():
+        await _lock_project(conn, project_id)
+        c = await conn.fetchrow(
+            "select revision from chunks where id = $1 and project_id = $2 and owner_id = $3", chunk_id, project_id, owner_id)
+        if c is None:
+            raise NotFound("That chunk doesn't exist.")
+        if c["revision"] != revision:
+            raise Conflict(f"This chunk changed since you loaded it (revision {c['revision']}, you sent {revision}).")
+        if await conn.fetchval("select count(*) from chunks where project_id = $1", project_id) <= 1:
+            raise Conflict("A project needs at least one chunk. Edit its text instead.")
+        await conn.execute("delete from chunks where id = $1", chunk_id)          # tts jobs cascade
+        await _pack(conn, project_id, await _ordered_ids(conn, project_id))
+        await settle_project(conn, project_id)          # it may have been the last one still voicing
 
 
 async def merge_chunks(pool: asyncpg.Pool, project_id: str, owner_id: str, first_id: str, first_rev: int,

@@ -69,6 +69,9 @@ export const editChunk = (projectId, chunkId, revision, changes) =>
 export const regenerateChunk = (projectId, chunkId) =>
   http(`/projects/${projectId}/chunks/${chunkId}/regenerate`, { method: "POST" });
 
+export const deleteChunk = (projectId, chunk) =>
+  http(`/projects/${projectId}/chunks/${chunk.id}`, { method: "DELETE", headers: { "If-Match": String(chunk.revision) } });
+
 export const chunkAudioUrl = (projectId, chunkId) =>
   http(`/projects/${projectId}/chunks/${chunkId}/audio-url`);
 

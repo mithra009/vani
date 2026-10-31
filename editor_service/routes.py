@@ -10,6 +10,7 @@
     PUT    /api/editor/projects/{id}/voice                one voice per project (D8); regenerates all chunks
     POST   /api/editor/projects/{id}/estimate             provider usage, no calls made
     PATCH  /api/editor/projects/{id}/chunks/{cid}         If-Match: <revision>
+    DELETE /api/editor/projects/{id}/chunks/{cid}         If-Match: <revision>
     POST   /api/editor/projects/{id}/chunks/{cid}/regenerate
     GET    /api/editor/projects/{id}/chunks/{cid}/audio-url
     GET    /api/editor/projects/{id}/events               SSE: snapshot | error | heartbeat
@@ -29,7 +30,7 @@ from typing import Literal
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Header, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -280,6 +281,14 @@ async def edit_chunk(request: Request, project_id: UUID, chunk_id: UUID, user: U
     await db.get_project(pool(request), str(project_id), user["id"])
     c = await db.edit_chunk(pool(request), str(project_id), user["id"], str(chunk_id), _revision(if_match), changes)
     return public_chunk(c)
+
+
+@router.delete("/projects/{project_id}/chunks/{chunk_id}", status_code=204)
+async def delete_chunk(request: Request, project_id: UUID, chunk_id: UUID, user: User,
+                       if_match: str | None = Header(default=None)):
+    await db.get_project(pool(request), str(project_id), user["id"])
+    await db.delete_chunk(pool(request), str(project_id), user["id"], str(chunk_id), _revision(if_match))
+    return Response(status_code=204)
 
 
 @router.post("/projects/{project_id}/chunks/{chunk_id}/regenerate")
