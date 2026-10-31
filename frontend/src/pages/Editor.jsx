@@ -394,8 +394,6 @@ function ChunkRow({ chunk, project }) {
       )}
       {chunk.emotion_tag && chunk.emotion_tag !== "neutral" && <span className="chunk-tag">{chunk.emotion_tag}</span>}
       {Number(chunk.speed) !== 1 && <span className="chunk-tag mono">{Number(chunk.speed).toFixed(2)}×</span>}
-      {chunk.fit_note && <span className={`chunk-tag ${chunk.fit_note.startsWith("Still") ? "chunk-tag-warn" : ""}`} title={chunk.fit_note}>
-        ⚡ {chunk.fit_note.startsWith("Still") ? "Still overlaps" : "Auto sped up"}</span>}
       {chunk.overflow && <span className="editor-chunk-overflow" title="Placed past the end of the video">Past video end</span>}
     </>
   );

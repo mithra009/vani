@@ -739,7 +739,6 @@ function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media,
       <>
         <div className="pp-subject"><span className="pp-chip pp-chip-voice">A2</span> Voice · chunk {c.idx + 1}</div>
         {p?.flags.map((f) => <p key={f} className="pp-warn">⚠ {FLAG_TEXT[f]}</p>)}
-        {c.fit_note && <p className={c.fit_note.startsWith("Still") ? "pp-warn" : "pp-note"}>⚡ {c.fit_note}</p>}
         <Section title="Content">
           <ChunkContent key={`${c.id}:${c.revision}`} chunk={c} project={project} setErr={setErr} />
         </Section>
