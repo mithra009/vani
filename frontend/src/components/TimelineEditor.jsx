@@ -85,6 +85,20 @@ export default function TimelineEditor({ project, chunks }) {
       .catch((e) => setErr(`Preview video unavailable: ${e.message}`));
   }, [project.id, project.asset_id]);
 
+  // The preview link is signed and can expire while the editor stays open (as little as ~12 min
+  // after it was handed out). A load error fetches a fresh link and retries; it only reports after
+  // two retries in a row fail, so a real problem still shows.
+  const proxyRetries = useRef(0);
+  async function refreshProxy() {
+    if (proxyRetries.current >= 2) {
+      setErr("The preview video failed to load. Reload the page; if it keeps failing, the video may need re-uploading.");
+      return;
+    }
+    proxyRetries.current += 1;
+    try { setProxyUrl((await api.assetPreviewUrl(project.asset_id)).url); }
+    catch (e) { setErr(`Preview video unavailable: ${e.message}`); }
+  }
+
   useEffect(() => {
     if (!videoRef.current) return;
     engine.current = new PreviewEngine(videoRef.current, {
@@ -270,7 +284,7 @@ export default function TimelineEditor({ project, chunks }) {
           <div className="pp-monitor">
             {proxyUrl
               ? <video ref={videoRef} src={proxyUrl} crossOrigin="anonymous" playsInline preload="auto" className="pp-video"
-                       onError={() => setErr("The preview video failed to load (the link may have expired; reload the page).")} />
+                       onError={refreshProxy} onLoadedData={() => { proxyRetries.current = 0; }} />
               : <div className="pp-video pp-video-empty"><Loader size={24} /> Preview video is still processing…</div>}
             {caption && <div className="pp-caption">{byId[caption.chunk_id]?.text}</div>}
           </div>

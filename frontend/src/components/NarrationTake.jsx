@@ -27,6 +27,15 @@ export default function NarrationTake({ project }) {
       .catch((e) => setErr(`The video can't load: ${e.message}`));
   }, [project.asset_id]);
 
+  // The signed video link can expire while this page is open; fetch a fresh one (twice at most).
+  const retries = useRef(0);
+  async function refreshSrc() {
+    if (retries.current >= 2) { setErr("The video failed to load. Reload the page."); return; }
+    retries.current += 1;
+    try { setSrc((await api.assetPreviewUrl(project.asset_id)).url); }
+    catch (e) { setErr(`The video can't load: ${e.message}`); }
+  }
+
   useEffect(() => {
     if (state !== "recording") return;
     const id = setInterval(() => setElapsed((performance.now() - started.current) / 1000), 200);
@@ -88,7 +97,7 @@ export default function NarrationTake({ project }) {
   return (
     <div className="narr">
       <div className="narr-stage">
-        {src ? <video ref={video} src={src} playsInline className="narr-video" />
+        {src ? <video ref={video} src={src} playsInline className="narr-video" onError={refreshSrc} onLoadedData={() => { retries.current = 0; }} />
           : <div className="narr-video narr-video-empty"><Loader size={28} /> Loading video…</div>}
       </div>
 

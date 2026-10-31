@@ -276,7 +276,7 @@ input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit
 .pp-video-empty { display: flex; align-items: center; justify-content: center; gap: 4px; }
 .loader path { transform-box: fill-box; transform-origin: center; animation: loader-bar 3s ease-in-out infinite; }
 @keyframes loader-bar { 0%, 60%, 100% { transform: scaleY(0.35); opacity: 0.5; } 30% { transform: scaleY(1); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .loader path { animation-duration: 4.5s; } }
+/* Same speed everywhere, reduced motion included; the shared clock in <Loader> assumes it. */
 
 /* ---------- review ---------- */
 .review { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 28px; align-items: start; padding-bottom: 120px; }
@@ -1125,7 +1125,7 @@ main { min-height: calc(100vh - var(--nav-h) - 72px); }
   background: var(--text); color: #000; cursor: pointer; transition: transform .1s var(--ease); }
 .ap-btn:hover:not(:disabled) { transform: scale(1.05); }
 .ap-btn:disabled { opacity: .6; cursor: default; }
-.ap-track { position: relative; flex: 1; height: 4px; border-radius: 2px; background: var(--surface-3); cursor: pointer; }
+.ap-track { position: relative; flex: 1; height: 4px; border-radius: 2px; background: rgba(246, 241, 231, 0.18); cursor: pointer; }
 .ap-track::before { content: ""; position: absolute; inset: -8px 0; }         /* bigger hit area */
 .ap-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--blue); }
 .ap-knob { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%;

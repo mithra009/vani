@@ -12,15 +12,23 @@ export default function AudioPlayer({ src, label = "Audio", autoPlay = false, on
   const [t, setT] = useState(0);
   const [dur, setDur] = useState(0);
 
+  // A loader function is re-created on every parent render (each live update), so only a new URL
+  // string resets the player; callers whose function source really changes remount it with a key
+  // (the chunk list keys players by revision). Resetting on function identity stopped playback
+  // whenever another chunk finished voicing.
+  const srcFn = useRef(src);
+  srcFn.current = src;
+  const srcKey = typeof src === "function" ? null : src;
+
   useEffect(() => () => { audio.current?.pause(); audio.current = null; }, []);
-  // A new source (e.g. regenerated chunk) resets the player.
-  useEffect(() => { audio.current?.pause(); audio.current = null; setState("idle"); setT(0); setDur(0); }, [src]);
+  useEffect(() => { audio.current?.pause(); audio.current = null; setState("idle"); setT(0); setDur(0); }, [srcKey]);
   useEffect(() => { if (autoPlay) toggle(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function ensure() {
     if (audio.current) return audio.current;
     setState("loading");
-    const url = typeof src === "function" ? await src() : src;
+    const s = srcFn.current;
+    const url = typeof s === "function" ? await s() : s;
     const a = new Audio(url);
     a.preload = "auto";
     a.ontimeupdate = () => setT(a.currentTime);
@@ -38,6 +46,9 @@ export default function AudioPlayer({ src, label = "Audio", autoPlay = false, on
       await a.play();
       setState("playing");
     } catch (e) {
+      // AbortError: this play() was cut short by a pause() (e.g. the user pressed pause again);
+      // nothing failed, so it isn't reported.
+      if (e.name === "AbortError") { setState(audio.current?.paused === false ? "playing" : "paused"); return; }
       setState("error");
       onError?.(`${label} couldn't be played: ${e.message}`);
     }
