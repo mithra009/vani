@@ -117,3 +117,19 @@ def test_acoustic_features_on_synthetic_voice():
     x = (0.3 * np.sin(2 * np.pi * 150 * t)).astype(np.float32)
     f = emo.features(x, sr)
     assert 140 < f["f0"] < 160
+
+
+# ---------- gnani: Timbre v3 tags and voices ----------
+
+def test_v3_tags_keeps_v3_tags_maps_old_ones_and_drops_unknown():
+    from backend.app.providers.gnani import v3_tags
+    assert v3_tags("<whispers> hello") == "<whispers> hello"
+    assert v3_tags("<softly> hi <chuckle> ok") == "<whispers> hi <giggle> ok"
+    assert v3_tags("<stammers> I, I think <nonsense> so") == "I, I think so"
+    assert v3_tags("<clears throat> right") == "<clears throat> right"
+
+
+def test_v25_voices_map_to_a_v3_voice_of_the_same_gender():
+    from backend.app.providers.gnani import V3_VOICE_FOR
+    assert V3_VOICE_FOR["Kavin"] == "Yashraj" and V3_VOICE_FOR["Saanvi"] == "Lakshmi"
+    assert "Lakshmi" not in V3_VOICE_FOR          # v3 voices pass through unchanged

@@ -11,9 +11,10 @@ from dataclasses import dataclass
 
 from .errors import OutputInvalid
 
-# Gnani Timbre v2.5 inline audio tags (same list the dubbing backend sends Gemini).
-EMOTION_TAGS = ("laugh", "chuckle", "giggle", "sigh", "exhales", "sniffles", "whispers", "softly",
-                "shouting", "high-pitched", "stammers", "rushed", "slow", "pauses")
+# Gnani Timbre v3.0 inline audio tags (v2.5 ignores tags). Older chunks may hold v2.5-era tags;
+# the Gnani provider maps those to their v3 equivalent (backend/app/providers/gnani.py).
+EMOTION_TAGS = ("laugh", "giggle", "sigh", "exhales", "sniffles", "whispers", "shouting", "excited",
+                "slow", "pauses", "coughs", "yawns", "clears throat")
 NEUTRAL = "neutral"
 ALLOWED = frozenset(EMOTION_TAGS) | {NEUTRAL}
 

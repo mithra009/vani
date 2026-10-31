@@ -1,8 +1,8 @@
-"""Does Gnani Timbre apply audio tags in a given language? Voices one sentence plainly and with a few
+"""Does Gnani Timbre v3.0 apply audio tags in a given language? Voices one sentence plainly and with a few
 tags, and saves each take so you can listen side by side. Costs one TTS call per take (4 by default).
 
-    python scripts/emotion_pilot.py --lang kn-IN --voice <voice_id> --text "ನಮಸ್ಕಾರ, ಇವತ್ತು ನಾವು ಹೊಸ ವಿಷಯ ಕಲಿಯೋಣ."
-    python scripts/emotion_pilot.py --lang en-IN --voice <voice_id> --text "Hello, today we learn something new." --tags shouting
+    python scripts/emotion_pilot.py --lang kn-IN --voice Lakshmi --text "ನಮಸ್ಕಾರ, ಇವತ್ತು ನಾವು ಹೊಸ ವಿಷಯ ಕಲಿಯೋಣ."
+    python scripts/emotion_pilot.py --lang en-IN --voice Lakshmi --text "Hello, today we learn something new." --tags shouting
 
 Uses GNANI_API_KEY from .env. Takes go to pilot_out/emotion/<lang>/. If the tagged takes sound like the
 plain one (and run about as long), Timbre ignores tags for that language.

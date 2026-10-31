@@ -198,7 +198,7 @@ export default function VoiceStep({ job, mode, onBack, onStart, starting }) {
                   <span className="voice-avatar" style={{ background: AVATAR[v.name.charCodeAt(0) % AVATAR.length] }}>{v.name[0]}</span>
                   <span>
                     <span className="voice-name" style={{ display: "block" }}>{v.name}</span>
-                    <span className="voice-meta">{v.gender}, {v.language}</span>
+                    <span className="voice-meta">{v.gender}, {v.description}</span>
                   </span>
                 </button>
                 <button className="voice-play" onClick={() => preview(v)} disabled={mode !== "live"}

@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 from pathlib import Path
 
 import httpx
@@ -18,6 +19,34 @@ log = logging.getLogger("vani.gnani")
 TERMINAL = {"COMPLETED", "PARTIAL_FAILURE", "FAILED", "START_FAILED", "CANCELLED"}
 POLL_S = 10            # docs: poll no faster than every 10 s
 AUTO_LANGS = "hi-IN,en-IN"   # language identification over up to 3 codes
+
+
+# Timbre v3.0: the only model that performs audio tags (v2.5 strips them before synthesis).
+# 13 voices, each speaks every language. docs.gnani.ai/api/TTS/tts-inference, /available-voices.
+TTS_MODEL = "timbre-v3.0"
+V3_TAGS = frozenset({"coughs", "excited", "exhales", "giggle", "laugh", "pauses", "shouting", "sigh", "slow",
+                     "sniffles", "whispers", "yawns", "clears throat"})
+# Older tags (still produced by the dubbing pipeline, and stored on earlier chunks) → nearest v3 tag, or dropped.
+_LEGACY_TAGS = {"chuckle": "giggle", "laughs harder": "laugh", "softly": "whispers", "high-pitched": "excited",
+                "rushed": "excited", "long_pause": "pauses", "stammers": None}
+_TAG_RE = re.compile(r"<([a-z _-]+)>\s?")
+
+# v2.5 voices on earlier projects → a v3 voice of the same gender, so those projects keep working.
+_V25_MALE = {"Deepak", "Dhruva", "Girish", "Hemraj", "Ishaan", "Jalaj", "Kavin", "Omkar", "Pranav", "Riyaan",
+             "Roopesh", "Shlok", "Veera", "Vikrant", "Zayan"}
+_V25_FEMALE = {"Ambuja", "Asmita", "Bhavna", "Brinda", "Chitra", "Devika", "Falak", "Jwala", "Kaveri", "Kirra",
+               "Lavanya", "Lehara", "Mehuli", "Nalini", "Noopur", "Poorvi", "Reshma", "Saanvi", "Suhana", "Trisha",
+               "Trupti", "Urmila", "Varuni", "Vedika", "Yashvi", "Yukti", "Zahira"}
+V3_VOICE_FOR = {**{v: "Yashraj" for v in _V25_MALE}, **{v: "Lakshmi" for v in _V25_FEMALE}}
+
+
+def v3_tags(text: str) -> str:
+    """Rewrite audio tags to ones Timbre v3 performs; unknown tags are dropped, never spoken aloud."""
+    def sub(m: re.Match) -> str:
+        tag = m.group(1)
+        tag = tag if tag in V3_TAGS else _LEGACY_TAGS.get(tag)
+        return f"<{tag}> " if tag else ""
+    return _TAG_RE.sub(sub, text)
 
 
 class GnaniError(RuntimeError):
@@ -99,7 +128,7 @@ class GnaniSpeech:
 
     async def tts(self, text: str, voice: str, lang: str, speed: float, sr: int = 48000) -> bytes:
         body = {
-            "text": text, "model": "timbre-v2.5", "voice": voice, "language": lang,
+            "text": v3_tags(text), "model": TTS_MODEL, "voice": V3_VOICE_FOR.get(voice, voice), "language": lang,
             "speed": round(speed, 3), "audio_config": self._audio_config(sr),
         }
         r = await self._req("POST", f"{GNANI_BASE}/api/v1/tts/inference", json=body)

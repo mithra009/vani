@@ -1,5 +1,5 @@
-// Languages and voices supported by Gnani Prisma v2.5 (STT) and Timbre v2.5 (TTS).
-// Voice list from docs.gnani.ai/api/TTS/available-voices (42 voices, all timbre-v2.5).
+// Languages and voices supported by Gnani Prisma v2.5 (STT) and Timbre v3.0 (TTS).
+// Voice list from docs.gnani.ai/api/TTS/available-voices (13 timbre-v3.0 voices, each speaks every language).
 
 export const SOURCE_LANGS = [
   { code: "auto", name: "Detect automatically" },
@@ -29,22 +29,21 @@ export const TARGET_LANGS = [
   { code: "hi-en", name: "Hinglish", native: "Hinglish", voiceLang: "Hinglish" },
 ];
 
-const V = (name, gender, language) => ({ id: name, name, gender, language });
+const V = (name, gender, description) => ({ id: name, name, gender, description, language: "All" });
 export const VOICES = [
-  V("Ambuja", "Female", "Hindi"), V("Asmita", "Female", "Tamil"), V("Bhavna", "Female", "Hindi"),
-  V("Brinda", "Female", "Tamil"), V("Chitra", "Female", "Hindi"), V("Deepak", "Male", "Hindi"),
-  V("Devika", "Female", "English"), V("Dhruva", "Male", "Bengali"), V("Falak", "Female", "Gujarati"),
-  V("Girish", "Male", "English"), V("Hemraj", "Male", "Hindi"), V("Ishaan", "Male", "Marathi"),
-  V("Jalaj", "Male", "Hindi"), V("Jwala", "Female", "Hindi"), V("Kaveri", "Female", "English"),
-  V("Kavin", "Male", "Kannada"), V("Kirra", "Female", "Bengali"), V("Lavanya", "Female", "Telugu"),
-  V("Lehara", "Female", "Telugu"), V("Mehuli", "Female", "Punjabi"), V("Nalini", "Female", "Hindi"),
-  V("Noopur", "Female", "Tamil"), V("Omkar", "Male", "Hindi"), V("Poorvi", "Female", "Hinglish"),
-  V("Pranav", "Male", "English"), V("Reshma", "Female", "Malayalam"), V("Riyaan", "Male", "Malayalam"),
-  V("Roopesh", "Male", "Hindi"), V("Saanvi", "Female", "Kannada"), V("Shlok", "Male", "English"),
-  V("Suhana", "Female", "Telugu"), V("Trisha", "Female", "Tamil"), V("Trupti", "Female", "English"),
-  V("Urmila", "Female", "Hindi"), V("Varuni", "Female", "Telugu"), V("Vedika", "Female", "Tamil"),
-  V("Veera", "Male", "Gujarati"), V("Vikrant", "Male", "Hindi"), V("Yashvi", "Female", "Hindi"),
-  V("Yukti", "Female", "Telugu"), V("Zahira", "Female", "Marathi"), V("Zayan", "Male", "Punjabi"),
+  V("Lakshmi", "Female", "Expressive, warm voice for storytelling"),
+  V("Vasudha", "Female", "Expressive, composed voice for narration"),
+  V("Yashraj", "Male", "Warm narrative voice"),
+  V("Avinash", "Male", "Professional, firm, deliberate pacing"),
+  V("Chetana", "Female", "Gentle, empathetic"),
+  V("Devansh", "Male", "Energetic, young, conversational"),
+  V("Kalpana", "Female", "Empathetic, composed"),
+  V("Prakash", "Male", "Steady, deliberate"),
+  V("Riyaa", "Female", "Confident, lively"),
+  V("Shivani", "Female", "Warm, patient"),
+  V("Shubham", "Male", "Energetic, confident"),
+  V("Tarika", "Female", "Warm, reassuring"),
+  V("Harshad", "Male", "Professional, firm"),
 ];
 
 export const EMOTIONS = {
@@ -61,10 +60,5 @@ export const EMOTIONS = {
 export const langName = (code) =>
   code === "same" ? "Same language" : [...SOURCE_LANGS, ...TARGET_LANGS].find((l) => l.code === code)?.name || code;
 
-export const voicesFor = (targetCode) => {
-  const t = TARGET_LANGS.find((l) => l.code === targetCode);
-  if (!t) return [];
-  const own = VOICES.filter((v) => v.language === t.voiceLang);
-  // Hinglish has one dedicated voice; Hindi voices also speak it well.
-  return t.code === "hi-en" ? [...own, ...VOICES.filter((v) => v.language === "Hindi")] : own;
-};
+// Every Timbre v3.0 voice speaks every target language.
+export const voicesFor = (targetCode) => (TARGET_LANGS.some((l) => l.code === targetCode) ? VOICES : []);

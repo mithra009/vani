@@ -17,6 +17,7 @@ from . import fit, media, providers, store
 from .config import LLM_MODEL, MIX_SR, STT_SR, TTS_CONCURRENCY
 from .jobs import update
 from .providers.fake import speech_regions
+from .providers.gnani import TTS_MODEL
 
 log = logging.getLogger("vani.pipeline")
 
@@ -257,7 +258,7 @@ async def _tts(speech, text: str, voice: dict, embedding, lang: str, speed: floa
     if voice["mode"] == "clone":
         key = h("ctts", text, embedding, lang)
     else:
-        key = h("tts", text, voice["voice_id"], lang, round(speed, 3))
+        key = h("tts", TTS_MODEL, text, voice["voice_id"], lang, round(speed, 3))
     path = CACHE_DIR / f"{key}.wav"
     if not path.exists():
         if voice["mode"] == "clone":

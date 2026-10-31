@@ -9,7 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 
 STT_MODEL = "gnani-prisma-v2.5"
-TTS_MODEL = "timbre-v2.5"
+TTS_MODEL = "timbre-v3.0"
 
 
 def h(*parts) -> str:

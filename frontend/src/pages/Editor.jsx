@@ -28,8 +28,8 @@ const CHUNK_STATUS = {
 };
 
 const EMOTION_TAGS = [
-  "neutral", "laugh", "chuckle", "giggle", "sigh", "exhales", "sniffles",
-  "whispers", "softly", "shouting", "high-pitched", "stammers", "rushed", "slow", "pauses",
+  "neutral", "laugh", "giggle", "sigh", "exhales", "sniffles", "whispers", "shouting", "excited",
+  "slow", "pauses", "coughs", "yawns", "clears throat",
 ];
 
 export default function EditorProject() {
