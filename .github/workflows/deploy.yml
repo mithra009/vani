@@ -105,6 +105,8 @@ jobs:
           $DC up -d --build --remove-orphans || {
             echo "::error::A service failed to start. Its own log usually says why (e.g. a Supabase migration to apply):"
             $DC ps; $DC logs --tail 40 editor-api media-api backend; exit 1; }
+          # nginx looks up the services' addresses once, at start; recreated services get new ones (→ 502).
+          $DC restart frontend
           docker image prune -f >/dev/null
           EOF
 
