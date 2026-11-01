@@ -273,7 +273,7 @@ function VoicePicker({ project }) {
                   </div>
                   {v.id === current
                     ? <span className="vp-tag">Current</span>
-                    : <button className="link-btn" onClick={() => pick(v)} disabled={!!busy}>{busy === v.id ? "Switching…" : "Use"}</button>}
+                    : <button className="btn btn-secondary btn-xs vp-use" onClick={() => pick(v)} disabled={!!busy}>{busy === v.id ? "Switching…" : "Use"}</button>}
                 </div>
               ))}
               {voices.length === 0 && <span className="dim">No voices available for {langName(project.tgt_lang)}.</span>}

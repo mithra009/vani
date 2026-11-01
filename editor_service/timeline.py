@@ -157,7 +157,7 @@ def _check_video(doc: dict) -> None:
             raise InputInvalid(f"Video clips must be at least {MIN_CLIP_S}s long.")
 
 
-VOICE_FIELDS = {"offset": (-30.0, 30.0), "trim_in": (0.0, 600.0), "trim_out": (0.0, 600.0),
+VOICE_FIELDS = {"offset": (-600.0, 600.0), "trim_in": (0.0, 600.0), "trim_out": (0.0, 600.0),
                 "gain_db": (GAIN_MIN_DB, GAIN_MAX_DB)}
 TRACK_FIELDS = {
     "original_audio": {"gain_db": "gain", "muted": "bool", "auto_duck": "bool"},

@@ -746,7 +746,7 @@ function Inspector({ sel, setSel, doc, tl, placed, byId, chunks, project, media,
         </Section>
         <Section title="Timing">
           {vc.detached_t == null
-            ? num("Offset", vc.offset, (v) => set({ offset: v }), { min: -30, max: 30, unit: "s" })
+            ? num("Offset", vc.offset, (v) => set({ offset: v }), { min: -600, max: 600, unit: "s" })
             : num("Position", vc.detached_t, (v) => set({ detached_t: v }), { min: 0, unit: "s" })}
           {num("Cut from start", vc.trim_in, (v) => set({ trim_in: v }), { min: 0, unit: "s" })}
           {num("Cut from end", vc.trim_out, (v) => set({ trim_out: v }), { min: 0, unit: "s" })}

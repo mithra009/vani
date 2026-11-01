@@ -107,7 +107,7 @@ function checkVideo(doc) {
   for (const c of doc.video) if (c.src_out - c.src_in < MIN_CLIP_S - EPS) throw new OpError(`Video clips must be at least ${MIN_CLIP_S}s long.`);
 }
 
-const VOICE_FIELDS = { offset: [-30, 30], trim_in: [0, 600], trim_out: [0, 600], gain_db: [GAIN_MIN_DB, GAIN_MAX_DB] };
+const VOICE_FIELDS = { offset: [-600, 600], trim_in: [0, 600], trim_out: [0, 600], gain_db: [GAIN_MIN_DB, GAIN_MAX_DB] };
 const TRACK_FIELDS = {
   original_audio: { gain_db: "gain", muted: "bool", auto_duck: "bool" },
   voice: { gain_db: "gain" },

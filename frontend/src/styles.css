@@ -982,7 +982,8 @@ main { min-height: calc(100vh - var(--nav-h) - 72px); }
   border: 1px solid var(--hairline); border-radius: var(--r-md); }
 .vp-card.on { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .vp-card-id { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.vp-card-name { font-size: 14px; font-weight: 600; }
+.vp-card-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-use { flex: none; min-width: 56px; padding: 0 10px; white-space: nowrap; }
 .vp-play { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--hairline-strong); background: var(--surface-2);
   color: var(--text); cursor: pointer; font-size: 11px; flex: none; }
 .vp-play:hover { border-color: var(--blue); color: var(--blue); }
