@@ -142,6 +142,10 @@ Lines:
 {json.dumps(items, ensure_ascii=False)}"""
 
 
+KEY_REST_S = 60          # a key that hit its quota (429) anyway sits out this long; the others carry on
+MAX_WAIT_S = 65          # longest a call waits for a key to free up before failing (the job retries later)
+
+
 class _KeyQuota:
     """One Gemini key's own limits (GEMINI_KEY_RPM / TPM / RPD), counted over sliding windows.
     Kept in the worker process: one editor-worker makes every Gemini call. A restart forgets the day's
