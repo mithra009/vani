@@ -814,6 +814,9 @@ img.team-avatar { object-fit: cover; background: var(--surface-3); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  /* Except the loader: it repeats forever, so 0.01 ms would make it flicker frantically (Windows sets
+     reduced motion when "Animation effects" is off). It keeps its calm 3 s wave, same as everywhere. */
+  .loader path { animation-duration: 3s !important; }
 }
 
 /* keep the footer at the bottom on short pages */

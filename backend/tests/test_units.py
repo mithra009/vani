@@ -133,3 +133,18 @@ def test_v25_voices_map_to_a_v3_voice_of_the_same_gender():
     from backend.app.providers.gnani import V3_VOICE_FOR
     assert V3_VOICE_FOR["Kavin"] == "Yashraj" and V3_VOICE_FOR["Saanvi"] == "Lakshmi"
     assert "Lakshmi" not in V3_VOICE_FOR          # v3 voices pass through unchanged
+
+
+
+def test_gnani_is_always_asked_for_normal_speed():
+    import asyncio, httpx
+    from backend.app.providers import gnani
+    sent = []
+    g = gnani.GnaniSpeech.__new__(gnani.GnaniSpeech)
+    async def fake_req(method, url, **kw):
+        sent.append(kw["json"]["speed"])
+        return httpx.Response(200, content=b"RIFF")
+    g._req = fake_req
+    for sp in (0.5, 1.15, 2.0):
+        asyncio.run(g.tts("hi", "Lakshmi", "kn-IN", sp))
+    assert sent == [1.0, 1.0, 1.0]

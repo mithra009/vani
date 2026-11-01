@@ -125,7 +125,7 @@ def test_script_to_export(env):
 
 
 def test_emotion_and_speed_edits_reach_tts(env, monkeypatch):
-    """Changing a chunk's emotion or speed must re-voice it with the new tag and speed, not reuse the old audio."""
+    """An emotion change re-voices the chunk (at 1.0) with the new tag; speed is ffmpeg only, never a Gnani call."""
     from fastapi.testclient import TestClient
     from editor_service import providers, worker
     from editor_service.main import app
@@ -160,12 +160,21 @@ def test_emotion_and_speed_edits_reach_tts(env, monkeypatch):
         assert r.status_code == 200, r.text
         drain()
 
-        # 2× is past Gnani's range: it is asked for its max (1.15) and ffmpeg stretches the rest.
-        assert calls == [(f"<whispers> {ch['text']}", 1.15)], calls
+        # Gnani is only ever asked for 1.0; the 2× comes from ffmpeg atempo on that take.
+        assert calls == [(f"<whispers> {ch['text']}", 1.0)], calls
         after = c.get(f"/api/editor/projects/{pid}").json()["chunks"][0]
         assert after["status"] == "ready" and after["emotion_tag"] == "whispers" and after["revision"] == ch["revision"] + 1
-        fake_1x = ch["audio_duration_s"] * float(ch["speed"])               # the fake voice scales length by 1/speed
-        assert after["audio_duration_s"] == pytest.approx(fake_1x / 2.0, rel=0.08), (ch, after)
+        assert after["audio_duration_s"] == pytest.approx(ch["audio_duration_s"] / 2.0, rel=0.08), (ch, after)
+
+        # A speed-only change reuses the cached 1.0 take: no Gnani call at all.
+        calls.clear()
+        r = c.patch(f"/api/editor/projects/{pid}/chunks/{ch['id']}", json={"speed": 0.5},
+                    headers={"If-Match": str(after["revision"])})
+        assert r.status_code == 200, r.text
+        drain()
+        assert calls == [], calls
+        slow = c.get(f"/api/editor/projects/{pid}").json()["chunks"][0]
+        assert slow["status"] == "ready" and slow["audio_duration_s"] == pytest.approx(ch["audio_duration_s"] * 2.0, rel=0.08)
 
 
 def test_export_failure_is_visible(env, monkeypatch):

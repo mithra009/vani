@@ -7,15 +7,20 @@ typed EditorError here, so the worker never sees a raw httpx/genai error.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
+import time
+from collections import deque
 from pathlib import Path
 
 import httpx
 
 from .chunking import EMOTION_TAGS, NEUTRAL
 from .config import (
-    CHUNK_TARGET_MAX_S, CHUNK_TARGET_MIN_S, FAKE_PROVIDERS, GOOGLE_API_KEY, LLM_MODEL, TTS_SR,
+    CHUNK_TARGET_MAX_S, CHUNK_TARGET_MIN_S, FAKE_PROVIDERS, GEMINI_KEY_RPD, GEMINI_KEY_RPM, GEMINI_KEY_TPM,
+    GOOGLE_API_KEYS, LLM_MODEL, TTS_SR,
 )
 from .errors import MediaFailed, OutputInvalid, ProviderError, ProviderRejected
 from backend.app.media import MediaError
@@ -29,6 +34,7 @@ LANG_NAMES = {
     "hi-en": "Hinglish (Hindi with natural English words, written in Roman script)",
 }
 
+log = logging.getLogger("editor.providers")
 _STATUS_RE = re.compile(r"Gnani (\d{3})")
 
 
@@ -110,36 +116,138 @@ Text:
 
 
 def translate_prompt(items: list[dict], src: str, tgt: str) -> str:
+    if tgt == "hi-en":                       # Hinglish is mixed by definition: English words are the point
+        words = "Mix Hindi and English the way people naturally speak Hinglish, in Roman script."
+    else:
+        words = (f"Translate EVERY word into {LANG_NAMES.get(tgt, tgt)}, written in its own script. Do not leave "
+                 "English words in English: use the word a native speaker would say. Only people's names, place "
+                 "names and brand names stay as they are, and even those are written in the target script.")
     return f"""Translate each spoken line from {LANG_NAMES.get(src, src)} into {LANG_NAMES.get(tgt, tgt)} for a voice-over.
-Spoken register, not written. Keep names, numbers, brands and technical words. Write numbers as digits.
+Spoken register, not written. {words} Write numbers as digits.
 Return one item per input id, same ids, JSON only.
 
 Lines:
 {json.dumps(items, ensure_ascii=False)}"""
 
 
-class GeminiLanguage:
+def shorten_prompt(items: list[dict], lang: str) -> str:
+    return f"""These {LANG_NAMES.get(lang, lang)} voice-over lines are too long for the time they have in the video.
+Rewrite each one shorter so it fits, keeping its full meaning and intent: drop filler and repetition, use
+shorter words and phrasing, never drop the point of the line or add anything. Keep the same language and
+script, spoken register. Stay within max_chars (counting spaces). "original" is the source line it translates.
+
+Return one item per input id, same ids, JSON only.
+
+Lines:
+{json.dumps(items, ensure_ascii=False)}"""
+
+
+class _KeyQuota:
+    """One Gemini key's own limits (GEMINI_KEY_RPM / TPM / RPD), counted over sliding windows.
+    Kept in the worker process: one editor-worker makes every Gemini call. A restart forgets the day's
+    count, so the day limit is a guard, not an exact mirror of Google's."""
+
     def __init__(self) -> None:
+        self.calls_min: deque[float] = deque()
+        self.calls_day: deque[float] = deque()
+        self.tokens_min: deque[tuple[float, int]] = deque()
+        self.rest_until = 0.0
+
+    def wait_for(self, tokens: int, now: float) -> float | None:
+        """Seconds until this key can take a call of `tokens`: 0 = now, None = not within MAX_WAIT_S."""
+        for q, span in ((self.calls_min, 60), (self.calls_day, 86_400)):
+            while q and now - q[0] >= span:
+                q.popleft()
+        while self.tokens_min and now - self.tokens_min[0][0] >= 60:
+            self.tokens_min.popleft()
+        if len(self.calls_day) >= GEMINI_KEY_RPD:
+            return None
+        waits = [max(0.0, self.rest_until - now)]
+        if len(self.calls_min) >= GEMINI_KEY_RPM:
+            waits.append(60 - (now - self.calls_min[0]))
+        used = sum(n for _, n in self.tokens_min)
+        if used + tokens > GEMINI_KEY_TPM and self.tokens_min:
+            waits.append(60 - (now - self.tokens_min[0][0]))
+        w = max(waits)
+        return w if w <= MAX_WAIT_S else None
+
+    def record(self, tokens: int, now: float) -> None:
+        self.calls_min.append(now)
+        self.calls_day.append(now)
+        self.tokens_min.append((now, tokens))
+
+
+def _tokens(prompt: str) -> int:
+    # Indic scripts run close to one token per character; counting every character errs on the safe side.
+    return len(prompt)
+
+
+class GeminiLanguage:
+    """Gemini over one or more API keys. Each call goes to the next key (round-robin) that is under its
+    own per-minute, per-token and per-day quota; if every key is full it waits for the first free slot.
+    A key that answers 429 anyway rests for KEY_REST_S and the same call moves to another key. When no
+    key frees up within MAX_WAIT_S, the call fails (ProviderError) and the job is retried later."""
+
+    def __init__(self, keys: list[str] | None = None) -> None:
         from google import genai
-        self.client = genai.Client(api_key=GOOGLE_API_KEY)
+        keys = keys or GOOGLE_API_KEYS
+        self.clients = [genai.Client(api_key=k) for k in keys]
+        self.quota = [_KeyQuota() for _ in self.clients]
+        self.next = 0
+        self.lock = asyncio.Lock()
+
+    async def _take_key(self, tokens: int, exclude: set[int]) -> int:
+        """Reserve a slot on a key and return its index (waits if all are momentarily full)."""
+        n = len(self.clients)
+        async with self.lock:
+            while True:
+                now = time.monotonic()
+                best, best_wait = None, None
+                for k in range(n):
+                    i = (self.next + k) % n
+                    if i in exclude:
+                        continue
+                    w = self.quota[i].wait_for(tokens, now)
+                    if w is not None and (best_wait is None or w < best_wait):
+                        best, best_wait = i, w
+                    if w == 0:
+                        break
+                if best is None:
+                    raise ProviderError(f"Every Gemini key ({n}) is at its quota; retrying later.")
+                if best_wait == 0:
+                    self.quota[best].record(tokens, now)
+                    self.next = (best + 1) % n
+                    return best
+                await asyncio.sleep(best_wait)
 
     async def _json(self, prompt: str, schema: dict) -> object:
         from google.genai import errors as gerrors
         from google.genai import types
-        try:
-            r = await self.client.aio.models.generate_content(
-                model=LLM_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.2, response_mime_type="application/json", response_json_schema=schema,
-                ),
-            )
-        except gerrors.APIError as e:
-            if e.code == 429 or (e.code or 500) >= 500:
-                raise ProviderError(f"Gemini is unavailable ({e.code}): {e.message}") from e
-            raise ProviderRejected(f"Gemini rejected the request ({e.code}): {e.message}") from e
-        except httpx.HTTPError as e:
-            raise ProviderError(f"Gemini network error: {e}") from e
+        tokens, tried = _tokens(prompt), set()
+        while True:
+            i = await self._take_key(tokens, tried)
+            try:
+                r = await self.clients[i].aio.models.generate_content(
+                    model=LLM_MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.2, response_mime_type="application/json", response_json_schema=schema,
+                    ),
+                )
+                break
+            except gerrors.APIError as e:
+                if e.code == 429:
+                    self.quota[i].rest_until = time.monotonic() + KEY_REST_S
+                    tried.add(i)
+                    log.warning("Gemini key #%d hit its quota; resting it %ds", i + 1, KEY_REST_S)
+                    if len(tried) < len(self.clients):
+                        continue                                    # same call, another key
+                    raise ProviderError(f"Gemini is over quota on every key ({e.code}): {e.message}") from e
+                if (e.code or 500) >= 500:
+                    raise ProviderError(f"Gemini is unavailable ({e.code}): {e.message}") from e
+                raise ProviderRejected(f"Gemini rejected the request ({e.code}): {e.message}") from e
+            except httpx.HTTPError as e:
+                raise ProviderError(f"Gemini network error: {e}") from e
         try:
             return json.loads(r.text or "")
         except json.JSONDecodeError as e:
@@ -150,6 +258,10 @@ class GeminiLanguage:
 
     async def translate(self, items: list[dict], src: str, tgt: str) -> object:
         return await self._json(translate_prompt(items, src, tgt), TRANSLATE_SCHEMA)
+
+    async def shorten(self, items: list[dict], lang: str) -> object:
+        """items: [{id, text, original, audio_ms, available_ms, max_chars}] → [{id, text}]."""
+        return await self._json(shorten_prompt(items, lang), TRANSLATE_SCHEMA)
 
 
 class FakeLanguage:
@@ -170,6 +282,9 @@ class FakeLanguage:
 
     async def translate(self, items: list[dict], src: str, tgt: str) -> object:
         return [{"id": it["id"], "text": f"[{tgt}] {it['text']}"} for it in items]
+
+    async def shorten(self, items: list[dict], lang: str) -> object:
+        return [{"id": it["id"], "text": it["text"][: it["max_chars"]].rstrip()} for it in items]
 
 
 def validate_translation(items: list[dict], raw: object) -> dict[int, str]:

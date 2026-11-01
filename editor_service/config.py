@@ -25,7 +25,11 @@ ALLOWED_ORIGINS = [
 # Set FAKE_PROVIDERS=0 only for a deliberate pilot.
 FAKE_PROVIDERS = os.getenv("FAKE_PROVIDERS", "1") == "1"
 GNANI_API_KEY = os.getenv("GNANI_API_KEY", "").strip()
-GOOGLE_API_KEY = (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or "").strip()
+# One or more Gemini keys: GEMINI_API_KEYS=key1,key2,… (the single GEMINI_API_KEY / GOOGLE_API_KEY still works).
+# Calls rotate across them, and a key that hits its quota rests while the others carry on (providers.py).
+GOOGLE_API_KEYS = [k.strip() for k in (os.getenv("GEMINI_API_KEYS") or os.getenv("GOOGLE_API_KEYS")
+                   or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or "").split(",") if k.strip()]
+GOOGLE_API_KEY = GOOGLE_API_KEYS[0] if GOOGLE_API_KEYS else ""
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
 
 MAX_VIDEO_SECONDS = limit("uploads", "max_video_seconds", 600, "MAX_VIDEO_SECONDS")          # C10
@@ -40,8 +44,7 @@ CHUNK_LLM_ATTEMPTS = 2                 # one retry on invalid Gemini output, the
 SCRIPT_GAP_S = 0.3
 DEFAULT_CPS = 13.0                     # chars/s used only to estimate script chunk length
 
-TTS_SPEED_MIN, TTS_SPEED_MAX = 0.5, 2.0       # what a chunk may ask for
-GNANI_SPEED_MIN, GNANI_SPEED_MAX = 0.85, 1.15  # Timbre's own range; the rest is ffmpeg atempo (pitch kept)
+TTS_SPEED_MIN, TTS_SPEED_MAX = 0.5, 2.0       # chunk speed, applied with ffmpeg atempo (Gnani always voices 1.0)
 TTS_SR = 48_000
 STT_SR = 16_000
 
@@ -50,8 +53,13 @@ STT_SR = 16_000
 RATE_LIMITS = {
     "gnani_tts": limit("providers", "gnani_tts_per_min", 60, "GNANI_TTS_RPM"),
     "gnani_stt": limit("providers", "gnani_stt_per_min", 4, "GNANI_STT_RPM"),
-    "gemini": limit("providers", "gemini_per_min", 30, "GEMINI_RPM"),
+    # limits.toml gives Gemini's budget per key; with several keys the app can make that many times more calls.
+    "gemini": limit("providers", "gemini_per_min", 15, "GEMINI_RPM") * max(1, len(GOOGLE_API_KEYS)),
 }
+# Google's quota for EACH Gemini key; the Gemini client never sends more than this through one key.
+GEMINI_KEY_RPM = limit("providers", "gemini_per_min", 15, "GEMINI_RPM")
+GEMINI_KEY_TPM = limit("providers", "gemini_tokens_per_min", 250_000, "GEMINI_TPM")
+GEMINI_KEY_RPD = limit("providers", "gemini_per_day", 500, "GEMINI_RPD")
 MAX_PROJECTS_PER_USER = limit("projects", "max_per_user", 50, "MAX_PROJECTS_PER_USER")
 MAX_ACTIVE_GENERATIONS = limit("projects", "max_generating_per_user", 3, "MAX_ACTIVE_GENERATIONS")
 BUSY_ACTIVE_USERS = limit("projects", "busy_active_users", 10, "BUSY_ACTIVE_USERS")

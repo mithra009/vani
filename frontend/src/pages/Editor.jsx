@@ -9,6 +9,7 @@ import { clock } from "../lib/format.js";
 import TimelineEditor from "../components/TimelineEditor.jsx";
 import ExportPanel from "../components/ExportPanel.jsx";
 import NarrationTake from "../components/NarrationTake.jsx";
+import OverlapFix from "../components/OverlapFix.jsx";
 import AudioPlayer from "../components/AudioPlayer.jsx";
 
 // ─────────────────────────────────── Editor page ──────────────────────────────
@@ -133,7 +134,7 @@ export default function EditorProject() {
           <NarrationTake project={project} />
         ) : (
           <>
-            {tab === "chunks" && <><VoicePicker project={project} /><ChunkList project={project} chunks={chunks} /></>}
+            {tab === "chunks" && <><VoicePicker project={project} /><OverlapFix project={project} chunks={chunks} /><ChunkList project={project} chunks={chunks} /></>}
             {tab === "timeline" && <TimelineEditor project={project} chunks={chunks} />}
             {tab === "export" && <ExportPanel project={project} chunks={chunks} />}
           </>

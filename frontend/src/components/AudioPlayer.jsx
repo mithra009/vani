@@ -5,6 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { Loader } from "./Icons.jsx";
 import { clock } from "../lib/format.js";
 
+// Only one player sounds at a time: starting one pauses whichever was playing (e.g. two chunks).
+let current = null;          // { audio, pause() } of the player now playing
+
 export default function AudioPlayer({ src, label = "Audio", autoPlay = false, onError, compact = false }) {
   const audio = useRef(null);
   const bar = useRef(null);
@@ -20,7 +23,10 @@ export default function AudioPlayer({ src, label = "Audio", autoPlay = false, on
   srcFn.current = src;
   const srcKey = typeof src === "function" ? null : src;
 
-  useEffect(() => () => { audio.current?.pause(); audio.current = null; }, []);
+  useEffect(() => () => {
+    if (current?.audio === audio.current) current = null;
+    audio.current?.pause(); audio.current = null;
+  }, []);
   useEffect(() => { audio.current?.pause(); audio.current = null; setState("idle"); setT(0); setDur(0); }, [srcKey]);
   useEffect(() => { if (autoPlay) toggle(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -43,6 +49,8 @@ export default function AudioPlayer({ src, label = "Audio", autoPlay = false, on
     try {
       const a = await ensure();
       if (!a.paused) { a.pause(); setState("paused"); return; }
+      if (current && current.audio !== a) current.pause();
+      current = { audio: a, pause: () => { a.pause(); setState("paused"); } };
       await a.play();
       setState("playing");
     } catch (e) {

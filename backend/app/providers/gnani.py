@@ -126,10 +126,13 @@ class GnaniSpeech:
     def _audio_config(sr: int) -> dict:
         return {"sample_rate": sr, "num_channels": 1, "sample_width": 2, "encoding": "linear_pcm", "container": "wav"}
 
-    async def tts(self, text: str, voice: str, lang: str, speed: float, sr: int = 48000) -> bytes:
+    async def tts(self, text: str, voice: str, lang: str, speed: float = 1.0, sr: int = 48000) -> bytes:
+        # Gnani is ALWAYS asked for normal speed. Its speed setting re-performs the line (a different
+        # take, not the same one faster) and isn't reliably faster, so callers change speed afterwards
+        # with ffmpeg atempo on this 1.0 take. `speed` is accepted for the call signature and ignored.
         body = {
             "text": v3_tags(text), "model": TTS_MODEL, "voice": V3_VOICE_FOR.get(voice, voice), "language": lang,
-            "speed": round(speed, 3), "audio_config": self._audio_config(sr),
+            "speed": 1.0, "audio_config": self._audio_config(sr),
         }
         r = await self._req("POST", f"{GNANI_BASE}/api/v1/tts/inference", json=body)
         return r.content

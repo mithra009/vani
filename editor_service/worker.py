@@ -28,7 +28,7 @@ from backend.app import media as amedia
 from media_service import storage
 from . import chunking, db, export, keys, placement, providers, ratelimit
 from .config import (
-    CHUNK_LLM_ATTEMPTS, DEFAULT_CPS, EXPORT_TIMEOUT_SECONDS, GNANI_SPEED_MAX, GNANI_SPEED_MIN, JOB_MAX_ATTEMPTS,
+    CHUNK_LLM_ATTEMPTS, DEFAULT_CPS, EXPORT_TIMEOUT_SECONDS, JOB_MAX_ATTEMPTS,
     MAX_VIDEO_SECONDS, SCRIPT_GAP_S,
     WORKER_POLL_SECONDS, WORKER_REAP_SECONDS, WORKER_STALE_JOB_SECONDS, check_providers,
 )
@@ -194,23 +194,32 @@ async def handle_tts(pool, job: dict, project: dict, workdir: Path) -> None:
     if chunk is None:
         raise Skip(f"chunk {job['chunk_id']} moved past revision {job['chunk_revision']}")
     owner = str(project["owner_id"])
-    voice, lang = project["voice"], project["tgt_lang"]
-    key = keys.tts_key(chunk["text"], voice, lang, chunk["emotion_tag"], chunk["speed"])
+    voice, lang, speed = project["voice"], project["tgt_lang"], float(chunk["speed"])
+    # Gnani only ever voices at 1.0; that take is cached, and any other speed is made from it with
+    # ffmpeg atempo. So a speed change never calls Gnani, and every speed is the same performance.
+    base_key = keys.tts_key(chunk["text"], voice, lang, chunk["emotion_tag"], 1.0)
+    key = keys.tts_key(chunk["text"], voice, lang, chunk["emotion_tag"], speed)
     hit = await db.artifact_get(pool, owner, key)
     if hit:
         audio_key, seconds = hit["storage_key"], float(hit["meta"]["duration_s"])
     else:
-        speech, _ = providers.get()
-        await ratelimit.acquire(pool, "gnani_tts", owner)     # cache hits above never count
-        speed = float(chunk["speed"])
-        gnani_speed = min(max(speed, GNANI_SPEED_MIN), GNANI_SPEED_MAX)
-        data = await speech.tts(chunking.tts_text(chunk["text"], chunk["emotion_tag"]), voice, lang, gnani_speed)
-        if abs(speed / gnani_speed - 1) > 1e-3:
-            data = await stretch_wav(data, speed / gnani_speed, workdir)
+        base = await db.artifact_get(pool, owner, base_key)
+        if base:
+            data = (await download(base["storage_key"], workdir / "tts_base.wav")).read_bytes()
+        else:
+            speech, _ = providers.get()
+            await ratelimit.acquire(pool, "gnani_tts", owner)     # only a new 1.0 take counts
+            data = await speech.tts(chunking.tts_text(chunk["text"], chunk["emotion_tag"]), voice, lang, 1.0)
+            base_path = keys.artifact_path(owner, "chunk_wav", base_key, "wav")
+            await upload_bytes(data, base_path, "audio/wav", workdir)
+            await db.artifact_put(pool, owner, base_key, "chunk_wav", base_path, {"duration_s": round(wav_seconds(data), 3)})
+        if key != base_key:
+            data = await stretch_wav(data, speed, workdir)
         seconds = wav_seconds(data)
         audio_key = keys.artifact_path(owner, "chunk_wav", key, "wav")
-        await upload_bytes(data, audio_key, "audio/wav", workdir)
-        await db.artifact_put(pool, owner, key, "chunk_wav", audio_key, {"duration_s": round(seconds, 3)})
+        if key != base_key:
+            await upload_bytes(data, audio_key, "audio/wav", workdir)
+            await db.artifact_put(pool, owner, key, "chunk_wav", audio_key, {"duration_s": round(seconds, 3)})
     if not await db.chunk_audio_ready(pool, chunk["id"], job["chunk_revision"], audio_key, round(seconds, 3)):
         raise Skip(f"chunk {chunk['id']} was edited while its audio was generating")
 

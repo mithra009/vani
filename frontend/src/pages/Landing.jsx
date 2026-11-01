@@ -53,7 +53,7 @@ const FEATURES = [
 
 const MODELS = [
   { name: "Prisma v2.5", role: "Speech to text", body: "Finds every spoken line and its exact timing, trained on over 14 million hours of Indian telephone audio. Handles Hinglish and other code-mixed speech." },
-  { name: "Timbre v3.0", role: "Text to speech", body: "42 natural voices across ten Indian languages, with audio tags for laughter, whispers and sighs, and correct reading of lakh and crore." },
+  { name: "Timbre v3.0", role: "Text to speech", body: "13 natural voices, each speaking all ten Indian languages, with audio tags for laughter, whispers and sighs, and correct reading of lakh and crore." },
   { name: "Voice cloning", role: "Text to speech", body: "Builds a voice from 5 to 30 seconds of clean speech, so a creator can be heard in languages they don't speak." },
 ];
 
@@ -192,7 +192,7 @@ export default function Landing({ mode }) {
         </motion.div>
         <motion.dl className="l-stats" {...reveal}>
           <div><dt>Languages</dt><dd>10 <small>+ Hinglish</small></dd></div>
-          <div><dt>Voices</dt><dd>42</dd></div>
+          <div><dt>Voices</dt><dd>13</dd></div>
           <div><dt>To clone a voice</dt><dd>5 s</dd></div>
           <div><dt>Longest video</dt><dd>10 min</dd></div>
         </motion.dl>

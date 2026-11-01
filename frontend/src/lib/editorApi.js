@@ -120,6 +120,11 @@ export const mergeChunks = (projectId, first, second) =>
     ...json({ first_id: first.id, first_revision: first.revision, second_id: second.id, second_revision: second.revision }),
   });
 
+// Overlaps: lines that run into the next one; fixed only when the user asks (mode: speed | shorten).
+export const listOverlaps = (projectId) => http(`/projects/${projectId}/overlaps`);
+export const fixOverlaps = (projectId, mode) =>
+  http(`/projects/${projectId}/overlaps/fix`, { method: "POST", ...json({ mode }) });
+
 // ------------------------------------------------------------------ timeline (phase 2)
 
 export const getTimeline = (projectId) => http(`/projects/${projectId}/timeline`);

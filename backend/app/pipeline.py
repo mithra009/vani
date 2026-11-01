@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -257,15 +258,22 @@ async def _translate(llm, job: dict, segs: list[dict], src: str, tgt: str, cps: 
 async def _tts(speech, text: str, voice: dict, embedding, lang: str, speed: float) -> Path:
     if voice["mode"] == "clone":
         key = h("ctts", text, embedding, lang)
-    else:
-        key = h("tts", TTS_MODEL, text, voice["voice_id"], lang, round(speed, 3))
-    path = CACHE_DIR / f"{key}.wav"
+        path = CACHE_DIR / f"{key}.wav"
+        if not path.exists():
+            path.write_bytes(await speech.clone_tts(text, embedding, lang, speed))
+        return path
+    # Gnani always voices at 1.0 (cached once); any other speed is that take through atempo.
+    base = CACHE_DIR / f"{h('tts', TTS_MODEL, text, voice['voice_id'], lang, 1.0)}.wav"
+    if not base.exists():
+        base.write_bytes(await speech.tts(text, voice["voice_id"], lang, 1.0))
+    if abs(speed - 1.0) < 0.005:
+        return base
+    path = CACHE_DIR / f"{h('tts', TTS_MODEL, text, voice['voice_id'], lang, round(speed, 3))}.wav"
     if not path.exists():
-        if voice["mode"] == "clone":
-            data = await speech.clone_tts(text, embedding, lang, speed)
-        else:
-            data = await speech.tts(text, voice["voice_id"], lang, speed)
-        path.write_bytes(data)
+        x, sr = await asyncio.to_thread(media.read, base)
+        with tempfile.TemporaryDirectory(prefix="atempo-") as td:   # own scratch: lines are voiced in parallel
+            y = await asyncio.to_thread(media.atempo, x, sr, speed, Path(td))
+        await asyncio.to_thread(media.write, path, y, sr)
     return path
 
 

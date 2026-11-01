@@ -4,6 +4,7 @@
 // Edits apply locally at once with undo/redo + autosave; preview is live Web Audio.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader } from "./Icons.jsx";
+import OverlapFix from "./OverlapFix.jsx";
 import * as editor from "../lib/editorApi.js";
 import { uploadToStorage } from "../lib/libraryStore.js";
 import { api } from "../lib/api.js";
@@ -347,6 +348,7 @@ export default function TimelineEditor({ project, chunks }) {
         {(err || tl.notices.length > 0) && (
           <div className="pp-msgs">
             {err && <div className="pp-msg pp-msg-err" role="alert"><span>{err}</span><button onClick={() => setErr(null)} aria-label="Dismiss">×</button></div>}
+            <OverlapFix project={project} chunks={chunks} compact />
             {tl.notices.map((n) => (
               <div key={n.id} className="pp-msg" role="status"><span>{n.msg}</span><button onClick={() => tl.dismiss(n.id)} aria-label="Dismiss">×</button></div>
             ))}

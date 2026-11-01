@@ -7,6 +7,8 @@
     GET    /api/editor/projects/{id}/media/{mid}/url
     POST   /api/editor/projects/{id}/chunks/{cid}/split       If-Match: <revision>; {at_char}   (C4: regenerates)
     POST   /api/editor/projects/{id}/chunks/merge             {first_id, first_revision, second_id, second_revision}
+    GET    /api/editor/projects/{id}/overlaps                 lines that run into the next one
+    POST   /api/editor/projects/{id}/overlaps/fix             {mode: speed | shorten} → re-voices those lines
 """
 
 from __future__ import annotations
@@ -16,12 +18,14 @@ from pathlib import PurePosixPath
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Request
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 from media_service import storage
 from media_service.auth import User
-from . import db, timeline
-from .errors import InputInvalid
+from . import db, overlaps, providers, ratelimit, timeline
+from .errors import Conflict, InputInvalid, LimitReached, OutputInvalid
 from .routes import _json, _revision, pool, public_chunk
 
 router = APIRouter(prefix="/api/editor")
@@ -137,3 +141,69 @@ async def merge_chunks(request: Request, project_id: UUID, user: User, body: Mer
     c = await db.merge_chunks(pool(request), str(project_id), user["id"], str(body.first_id), body.first_revision,
                               str(body.second_id), body.second_revision)
     return public_chunk(c)
+
+
+# ------------------------------------------------------------------ overlaps (user-requested fixes)
+
+class FixOverlaps(BaseModel):
+    mode: Literal["speed", "shorten"]
+
+
+async def _overlapping(p, pid: str, owner: str) -> tuple[list[dict], dict[str, dict]]:
+    tl = await db.get_timeline(p, pid, owner, timeline.default_doc)
+    chunks = await db.list_chunks(p, pid, owner)
+    return overlaps.overlapping(tl["doc"], chunks), {str(c["id"]): c for c in chunks}
+
+
+@router.get("/projects/{project_id}/overlaps")
+async def list_overlaps(request: Request, project_id: UUID, user: User):
+    p, pid, owner = pool(request), str(project_id), user["id"]
+    await db.get_project(p, pid, owner)
+    lines, _ = await _overlapping(p, pid, owner)
+    return [{"chunk_id": x["chunk_id"], "length_s": x["length_s"], "available_s": x["available_s"],
+             "speed": x["speed"], "speed_to_fit": overlaps.speed_to_fit(x)} for x in lines]
+
+
+@router.post("/projects/{project_id}/overlaps/fix")
+async def fix_overlaps(request: Request, project_id: UUID, user: User, body: FixOverlaps):
+    """Re-voice every line that runs into the next one: faster (exact, computed) or shorter (Gemini)."""
+    p, pid, owner = pool(request), str(project_id), user["id"]
+    project = await db.get_project(p, pid, owner)
+    if project["status"] != "editing":
+        raise Conflict("Wait until every line has its voice, then fix overlaps.")
+    lines, by_id = await _overlapping(p, pid, owner)
+    fixed, skipped = [], []
+    if body.mode == "speed":
+        for x in lines:
+            s = overlaps.speed_to_fit(x)
+            if s is None:
+                skipped.append({"chunk_id": x["chunk_id"], "reason": f"needs more than {overlaps.MAX_SPEED:g}× to fit"})
+                continue
+            c = by_id[x["chunk_id"]]
+            await db.edit_chunk(p, pid, owner, x["chunk_id"], c["revision"], {"speed": s})
+            fixed.append({"chunk_id": x["chunk_id"], "speed": s})
+        return {"fixed": fixed, "skipped": skipped}
+
+    if not lines:
+        return {"fixed": [], "skipped": []}
+    items = [{"id": n, "text": x["text"], "original": x["source_text"], "audio_ms": round(x["length_s"] * 1000),
+              "available_ms": round(x["available_s"] * 1000), "max_chars": overlaps.shorten_budget(x)}
+             for n, x in enumerate(lines)]
+    try:
+        await ratelimit.acquire(p, "gemini", owner)
+    except ratelimit.Throttled as e:
+        raise LimitReached(f"Gemini is busy right now; try again in {e.delay_s:.0f} s.")
+    _, llm = providers.get()
+    try:
+        got = providers.validate_translation(items, await llm.shorten(items, project["tgt_lang"]))
+    except OutputInvalid as e:
+        raise OutputInvalid(f"Gemini couldn't shorten the lines: {e}", "shorten_invalid")
+    for it, x in zip(items, lines):
+        text = got[it["id"]]
+        if len(text) > it["max_chars"] * 1.15 or len(text) >= len(x["text"]):
+            skipped.append({"chunk_id": x["chunk_id"], "reason": "Gemini's shorter version was still too long"})
+            continue
+        c = by_id[x["chunk_id"]]
+        await db.edit_chunk(p, pid, owner, x["chunk_id"], c["revision"], {"text": text})
+        fixed.append({"chunk_id": x["chunk_id"], "text": text})
+    return {"fixed": fixed, "skipped": skipped}

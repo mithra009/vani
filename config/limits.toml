@@ -12,7 +12,11 @@
 # Start conservative; raise once Gnani confirms your key's real limits. 0 = no limit.
 gnani_tts_per_min = 60        # [GNANI_TTS_RPM]   one call per chunk voiced (cached chunks are free)
 gnani_stt_per_min = 10         # [GNANI_STT_RPM]   one call per video/narration transcribed
-gemini_per_min    = 20        # [GEMINI_RPM]      chunking + translation, 1–2 calls per project
+# Gemini: Google's free-tier quota for EACH key (AI Studio > Usage). Every key is held to all three;
+# with GEMINI_API_KEYS=k1,k2,k3 in .env the app can do 3× this. Chunking + translation = 1–2 calls/project.
+gemini_per_min        = 15        # [GEMINI_RPM]  requests per minute, per key
+gemini_tokens_per_min = 250000    # [GEMINI_TPM]  input tokens per minute, per key
+gemini_per_day        = 500       # [GEMINI_RPD]  requests per day, per key
 
 [projects]
 max_per_user               = 10   # [MAX_PROJECTS_PER_USER]
