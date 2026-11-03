@@ -4,6 +4,11 @@
 #   EC2_HOST      the server's public IP
 #   EC2_USER      ubuntu
 #   EC2_SSH_KEY   the full contents of your .pem file
+#   EC2_SG_ID     the server's security group id (sg-…); SSH is closed to the world, and each
+#                 deploy opens port 22 to its own runner's IP only, then closes it again
+#   AWS_DEPLOY_ACCESS_KEY_ID / AWS_DEPLOY_SECRET_ACCESS_KEY
+#                 an IAM user allowed only ec2:AuthorizeSecurityGroupIngress and
+#                 ec2:RevokeSecurityGroupIngress on that security group
 # The app's own secrets live only in /opt/vani/.env on the server, never in GitHub.
 
 name: CI / Deploy
@@ -77,8 +82,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ap-south-1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Open SSH to this runner only
+        run: |
+          IP=$(curl -fsS https://checkip.amazonaws.com)
+          echo "RUNNER_IP=$IP" >> "$GITHUB_ENV"
+          aws ec2 authorize-security-group-ingress --group-id "${{ secrets.EC2_SG_ID }}" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$IP/32,Description=github-deploy}]"
+          sleep 5                            # let the rule reach the instance before the first connection
 
       - name: SSH key
         run: |
@@ -128,3 +145,9 @@ jobs:
       - name: Remove key
         if: always()
         run: rm -f ~/.ssh/deploy.pem
+
+      - name: Close SSH again
+        if: always() && env.RUNNER_IP != ''
+        run: |
+          aws ec2 revoke-security-group-ingress --group-id "${{ secrets.EC2_SG_ID }}" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${RUNNER_IP}/32}]"
