@@ -33,6 +33,12 @@ FAKE_PROVIDERS = os.getenv("FAKE_PROVIDERS", "0") == "1"
 
 MAX_VIDEO_SECONDS = 600
 MAX_UPLOAD_BYTES = 500_000_000
+# Projects one user may have transcribing or dubbing at once: the worker is shared, one job at a time.
+MAX_ACTIVE_JOBS_PER_USER = int(os.getenv("MAX_ACTIVE_JOBS_PER_USER", "2"))
+# Saved uploads keep one of these extensions, never the client's own, so a name like .m3u8
+# can't make ffmpeg read the upload as a playlist of other files.
+VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+AUDIO_EXTS = {".webm", ".wav", ".mp3", ".m4a", ".ogg", ".opus", ".aac", ".flac", ".mp4"}
 MIX_SR = 48_000          # timeline / mixing sample rate
 STT_SR = 16_000
 

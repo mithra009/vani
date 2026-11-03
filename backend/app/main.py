@@ -19,7 +19,8 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from . import jobs, media, pipeline, providers, store
 from .auth import User, me_router, router as auth_router
-from .config import FAKE_PROVIDERS, MAX_UPLOAD_BYTES, MAX_VIDEO_SECONDS
+from .config import (AUDIO_EXTS, FAKE_PROVIDERS, MAX_ACTIVE_JOBS_PER_USER, MAX_UPLOAD_BYTES,
+                     MAX_VIDEO_SECONDS, VIDEO_EXTS)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("vani.api")
@@ -109,10 +110,11 @@ async def create_job(user: User, video: UploadFile = File(...), src_lang: str = 
         raise HTTPException(400, "mode must be 'dub' or 'narrate'.")
     if tgt_lang == "same" and mode != "narrate":
         raise HTTPException(400, "Choose a target language.")
+    if mode == "dub":
+        check_active_jobs(user)
     job_id = uuid.uuid4().hex[:12]
     d = store.job_dir(job_id)
-    ext = Path(video.filename or "video.mp4").suffix or ".mp4"
-    path = d / f"input{ext}"
+    path = d / f"input{safe_ext(video.filename, VIDEO_EXTS, '.mp4')}"
     size = await save_upload(video, path, MAX_UPLOAD_BYTES)
     try:
         info = await asyncio.to_thread(media.probe, path)
@@ -155,6 +157,19 @@ def read_job(job_id: str, user: User):
 BUSY = {"transcribing", "dubbing"}
 
 
+def safe_ext(filename: str | None, allowed: set[str], default: str) -> str:
+    ext = Path(filename or "").suffix.lower()
+    return ext if ext in allowed else default
+
+
+def check_active_jobs(user: dict) -> None:
+    """One shared worker runs every user's jobs in turn, so cap how many one user can queue."""
+    active = sum(1 for j in store.list_jobs(user["id"]) if j.get("status") in BUSY)
+    if active >= MAX_ACTIVE_JOBS_PER_USER:
+        raise HTTPException(429, f"You already have {active} projects processing. "
+                                 "Wait for one to finish, then try again.")
+
+
 @app.patch("/api/jobs/{job_id}")
 async def rename_job(job_id: str, user: User, request: Request):
     body = await request.json()
@@ -183,8 +198,9 @@ async def upload_narration(job_id: str, user: User, audio: UploadFile = File(...
     job = get_job(job_id, user)
     if job["mode"] != "narrate" or job["status"] not in ("awaiting_narration", "review", "failed"):
         raise HTTPException(409, "This project isn't waiting for a narration.")
+    check_active_jobs(user)
     d = store.job_dir(job_id)
-    raw = d / f"narration_raw{Path(audio.filename or '').suffix or '.webm'}"
+    raw = d / f"narration_raw{safe_ext(audio.filename, AUDIO_EXTS, '.webm')}"
     await save_upload(audio, raw, 100_000_000)
     try:
         info = await asyncio.to_thread(media.probe, raw)
@@ -225,6 +241,7 @@ async def start_dub(job_id: str, user: User, request: Request):
     job = get_job(job_id, user)
     if job["status"] not in ("review", "done", "failed"):
         raise HTTPException(409, "This project isn't ready to dub.")
+    check_active_jobs(user)
     if request.headers.get("content-type", "").startswith("multipart/"):
         form = await request.form()
         settings = json.loads(form["settings"])

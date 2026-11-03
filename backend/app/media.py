@@ -24,11 +24,13 @@ def run(args: list[str]) -> str:
 
 
 def ffmpeg(*args: str) -> None:
-    run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *args])
+    # Local files only: an uploaded playlist must not make ffmpeg fetch URLs.
+    run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file", *args])
 
 
 def probe(path: Path) -> dict:
-    out = run(["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)])
+    out = run(["ffprobe", "-v", "error", "-protocol_whitelist", "file",
+               "-print_format", "json", "-show_format", "-show_streams", str(path)])
     info = json.loads(out)
     streams = info.get("streams", [])
     return {
