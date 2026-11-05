@@ -66,8 +66,9 @@ BUSY_ACTIVE_USERS = limit("projects", "busy_active_users", 10, "BUSY_ACTIVE_USER
 MAX_QUEUED_EXPORTS_PER_USER = limit("projects", "max_queued_exports_per_user", 2, "MAX_QUEUED_EXPORTS_PER_USER")
 
 # Worker queue behaviour (mirrors media_service/config.py).
-JOB_MAX_ATTEMPTS = int(os.getenv("EDITOR_JOB_MAX_ATTEMPTS", "4"))
+JOB_MAX_ATTEMPTS = int(os.getenv("EDITOR_JOB_MAX_ATTEMPTS", "8"))
 JOB_RETRY_BASE_SECONDS = int(os.getenv("EDITOR_JOB_RETRY_BASE_SECONDS", "15"))
+JOB_RETRY_MAX_SECONDS = int(os.getenv("EDITOR_JOB_RETRY_MAX_SECONDS", "120"))   # 15, 30, 60, 120, 120, … (~10 min in all)
 WORKER_POLL_SECONDS = float(os.getenv("WORKER_POLL_SECONDS", "0.5"))
 WORKER_STALE_JOB_SECONDS = int(os.getenv("EDITOR_WORKER_STALE_JOB_SECONDS", "2400"))
 WORKER_REAP_SECONDS = float(os.getenv("WORKER_REAP_SECONDS", "60"))

@@ -132,6 +132,8 @@ async def handle_generate(pool, job: dict, project: dict, workdir: Path) -> None
     if duration > MAX_VIDEO_SECONDS + 1:
         raise InputInvalid(f"Videos are limited to {MAX_VIDEO_SECONDS // 60} minutes.", "too_long")
 
+    if job["attempts"] > 1:
+        await db.set_notice(pool, job["project_id"], None)       # the retry is under way; drop the wait notice
     if project["input_kind"] == "script":
         transcript = chunking.script_transcript(project["script_text"] or "")
         if not transcript.text:
@@ -337,6 +339,21 @@ HANDLERS = {"generate": handle_generate, "tts": handle_tts, "export": handle_exp
 
 # ------------------------------------------------------------------ loop
 
+def wait_notice(err: Exception, attempts: int) -> str:
+    """What the editor shows while a generate job waits for its next try: the reason, in plain words,
+    and when it retries. Keeps the user from assuming the project is stuck or needs a restart."""
+    s = str(err)
+    if "Gemini" in s:
+        why = "Google's Gemini translation service is busy right now."
+    elif "Gnani" in s:
+        why = "Gnani's speech service is busy right now."
+    else:
+        why = "A service we rely on is busy right now."
+    delay = db.backoff_seconds(attempts)
+    return (f"{why} Retrying automatically in {delay} s (attempt {attempts} of {JOB_MAX_ATTEMPTS}). "
+            "Nothing to do on your side; you can leave this page and come back.")
+
+
 async def record_failure(pool, job: dict, err: EditorError | Exception) -> None:
     code = getattr(err, "code", "internal")
     retry = bool(getattr(err, "retryable", False))
@@ -345,6 +362,8 @@ async def record_failure(pool, job: dict, err: EditorError | Exception) -> None:
     if not final:
         log.warning("job %s %s failed, will retry (attempt %s/%s): %s", job["id"], job["kind"],
                     job["attempts"], JOB_MAX_ATTEMPTS, err)
+        if job["kind"] == "generate":
+            await db.set_notice(pool, job["project_id"], wait_notice(err, job["attempts"]))
         return
     log.error("job %s %s failed permanently [%s]: %s", job["id"], job["kind"], code, err)
     if job["kind"] == "generate":

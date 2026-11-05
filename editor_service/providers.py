@@ -144,6 +144,7 @@ Lines:
 
 KEY_REST_S = 60          # a key that hit its quota (429) anyway sits out this long; the others carry on
 MAX_WAIT_S = 65          # longest a call waits for a key to free up before failing (the job retries later)
+BUSY_RETRY_S = (5, 10, 20)   # a 5xx ("high demand") is retried in-call after these waits, on the next key
 
 
 class _KeyQuota:
@@ -227,7 +228,7 @@ class GeminiLanguage:
     async def _json(self, prompt: str, schema: dict) -> object:
         from google.genai import errors as gerrors
         from google.genai import types
-        tokens, tried = _tokens(prompt), set()
+        tokens, tried, busy = _tokens(prompt), set(), 0
         while True:
             i = await self._take_key(tokens, tried)
             try:
@@ -248,6 +249,11 @@ class GeminiLanguage:
                         continue                                    # same call, another key
                     raise ProviderError(f"Gemini is over quota on every key ({e.code}): {e.message}") from e
                 if (e.code or 500) >= 500:
+                    if busy < len(BUSY_RETRY_S):
+                        log.warning("Gemini answered %s on key #%d; retrying in %ds", e.code, i + 1, BUSY_RETRY_S[busy])
+                        await asyncio.sleep(BUSY_RETRY_S[busy])
+                        busy += 1
+                        continue                                    # same call, next key in rotation
                     raise ProviderError(f"Gemini is unavailable ({e.code}): {e.message}") from e
                 raise ProviderRejected(f"Gemini rejected the request ({e.code}): {e.message}") from e
             except httpx.HTTPError as e:

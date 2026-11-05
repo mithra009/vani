@@ -24,7 +24,7 @@ class Mem:
     def __init__(self, project):
         self.project, self.chunks, self.artifacts, self.blobs = project, {}, {}, {}
         self.jobs, self.finished, self.project_fail, self.chunk_fail = [], [], None, {}
-        self.stages = []
+        self.stages, self.notices = [], []
 
     def install(self, mp):
         mem = self
@@ -72,8 +72,11 @@ class Mem:
         async def set_stage(_, pid, stage):
             mem.stages.append(stage)
 
+        async def set_notice(_, pid, msg):
+            mem.notices.append(msg)
+
         for fn in (artifact_get, artifact_put, replace_chunks, chunk_generating, chunk_audio_ready,
-                   chunk_failed, fail_project, finish_job, claim_job, project_for_job, set_stage):
+                   chunk_failed, fail_project, finish_job, claim_job, project_for_job, set_stage, set_notice):
             mp.setattr(db, fn.__name__, fn)
 
         async def download(key, dst: Path):
@@ -244,6 +247,23 @@ def test_transient_provider_error_retries_then_lands_on_the_chunk(monkeypatch):
     mem.jobs = [dict(job, attempts=4)]
     asyncio.run(worker.process_one(None))
     assert mem.chunk_fail["c0"][0] == "provider_unavailable"
+
+
+def test_a_busy_provider_tells_the_user_why_generation_waits(monkeypatch):
+    mem = Mem(project(input_kind="script", script_text="Hello."))
+    mem.install(monkeypatch)
+
+    async def busy(self, *a, **k):
+        raise ProviderError("Gemini is unavailable (503): high demand")
+    monkeypatch.setattr(providers.FakeLanguage, "chunk", busy)
+    mem.jobs = generate_job(attempts=2)
+    asyncio.run(worker.process_one(None))
+    assert mem.finished[-1] == ("g", "FAILED", "provider_unavailable", False)
+    assert mem.notices[0] is None                                   # attempt 2 began: the old notice went
+    note = mem.notices[-1]
+    assert "Gemini" in note and "busy" in note and f"attempt 2 of {worker.JOB_MAX_ATTEMPTS}" in note
+    assert f"in {db.backoff_seconds(2)} s" in note
+    assert mem.project_fail is None                                 # not failed: it will retry
 
 
 def test_unexpected_crash_is_recorded_not_swallowed(monkeypatch):

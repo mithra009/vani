@@ -114,7 +114,9 @@ export default function EditorProject() {
       )}
       {project.error_message && (
         <section className="ed-sec" style={{ paddingTop: 0, paddingBottom: 0 }}>
-          <div className="banner error" role="alert">
+          {/* While generating, the message is a wait notice (a provider is busy, retrying), not a failure. */}
+          <div className={`banner ${project.status === "generating" ? "warn" : "error"}`}
+               role={project.status === "generating" ? "status" : "alert"}>
             <span className="banner-dot" />
             <span>{project.error_message}</span>
             {project.status === "failed" && (

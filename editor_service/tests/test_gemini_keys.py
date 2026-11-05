@@ -17,8 +17,9 @@ def _client(log, i, fail):
     class Models:
         async def generate_content(self, **kw):
             log.append(i)
-            if fail[i]:
-                raise gerrors.APIError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED"}})
+            code = 429 if fail[i] is True else (fail[i] or 0)      # True → 429, or an explicit status code
+            if code:
+                raise gerrors.APIError(code, {"error": {"code": code, "message": "quota", "status": "RESOURCE_EXHAUSTED"}})
             return _Resp()
 
     class Aio:
@@ -63,6 +64,21 @@ def test_calls_rotate_and_a_429_moves_the_call_to_the_next_key(monkeypatch):
         fail[1] = fail[2] = True
         with pytest.raises(p.ProviderError):
             await g.translate(ITEMS, "en-IN", "kn-IN")
+    asyncio.run(go())
+
+
+def test_a_503_is_retried_in_call_on_the_next_key_before_giving_up(monkeypatch):
+    g, log, fail, clock = _gemini(2, monkeypatch)
+
+    async def go():
+        fail[0] = 503                                                 # key 1 is overloaded, key 2 is fine
+        await g.translate(ITEMS, "en-IN", "kn-IN")
+        assert log == [0, 1] and clock[0] - 1000 == pytest.approx(p.BUSY_RETRY_S[0])
+        log.clear()
+        fail[1] = 503                                                 # both overloaded: three waits, then fail
+        with pytest.raises(p.ProviderError, match="unavailable"):
+            await g.translate(ITEMS, "en-IN", "kn-IN")
+        assert len(log) == len(p.BUSY_RETRY_S) + 1
     asyncio.run(go())
 
 

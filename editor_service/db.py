@@ -16,7 +16,7 @@ from uuid import uuid4
 import asyncpg
 
 from media_service.db import connect  # noqa: F401  same pool rules (no transaction pooler)
-from .config import JOB_MAX_ATTEMPTS, JOB_RETRY_BASE_SECONDS
+from .config import JOB_MAX_ATTEMPTS, JOB_RETRY_BASE_SECONDS, JOB_RETRY_MAX_SECONDS
 from .errors import Conflict, NotFound
 
 log = logging.getLogger("editor.db")
@@ -36,7 +36,7 @@ def _row(r: asyncpg.Record | None) -> dict | None:
 
 
 def backoff_seconds(attempts: int) -> int:
-    return JOB_RETRY_BASE_SECONDS * 2 ** max(0, attempts - 1)
+    return min(JOB_RETRY_BASE_SECONDS * 2 ** max(0, attempts - 1), JOB_RETRY_MAX_SECONDS)
 
 
 # ------------------------------------------------------------------ projects
@@ -165,6 +165,15 @@ async def fail_project(pool: asyncpg.Pool, project_id: str, code: str, message: 
     await pool.execute(
         "update editor_projects set status = 'failed', error_code = $2, error_message = $3 where id = $1",
         project_id, code, message[:2000],
+    )
+
+
+async def set_notice(pool: asyncpg.Pool, project_id: str, message: str | None) -> None:
+    """Why a generating project is waiting (a provider is busy, retrying soon), shown in the editor's
+    banner. Reuses error_message; cleared when the next attempt starts, overwritten by fail_project."""
+    await pool.execute(
+        "update editor_projects set error_code = $2, error_message = $3 where id = $1 and status = 'generating'",
+        project_id, "retrying" if message else None, (message or "")[:2000] or None,
     )
 
 
