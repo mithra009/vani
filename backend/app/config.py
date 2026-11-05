@@ -15,7 +15,9 @@ DB_PATH = STORAGE / "vani.db"
 
 GNANI_API_KEY = os.getenv("GNANI_API_KEY", "").strip()
 GNANI_BASE = os.getenv("GNANI_BASE_URL", "https://api.vachana.ai")
-GOOGLE_API_KEY = (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or "").strip()
+# GEMINI_API_KEYS is the comma list the editor service rotates through; this service uses its first key.
+GOOGLE_API_KEY = (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+                  or os.getenv("GEMINI_API_KEYS") or "").split(",")[0].strip()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()

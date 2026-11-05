@@ -1,45 +1,89 @@
 # Vani: demo video script
 
-**Length:** about 2:25 for the full cut. A 60-second cut is at the end.
-**Format:** screen recording of `https://13-234-103-238.sslip.io` with a voiceover, 1920×1080, browser at 100% zoom.
-**Clip to use:** one short English clip (15–30 s) with clear speech and one emotional moment, such as a laugh or a raised voice. "Why India needs oil reserves" works well.
+*Vāṇī* means "voice" or "speech". The video tells one small story: a voice that couldn't reach the people
+it was meant for, and how Vani carries it across, laugh and all.
+
+**Length:** about 2:30 for the full cut. A 60-second cut is at the end.
+**Format:** a few seconds of real footage at the start and end (optional; title cards work too), then a screen
+recording of `https://vani2.duckdns.org` with your voiceover. 1920×1080, browser at 100% zoom.
+**Clip to use:** a short English clip (15–30 s) with clear speech and one moment of feeling: a laugh, a
+pause, a raised voice. "Why India needs oil reserves" works well.
+
+## The story in one line
+
+Someone made something worth hearing, in English. The person who most needed to hear it speaks only Kannada.
+Vani gives the same voice, with the same feeling, a new language.
 
 ## Before you record
 
-1. **Prepare one finished project ahead of time**, so you never wait on screen:
+1. **Prepare one finished project**, so you never wait on screen:
    - Dub the clip English → Kannada, voice **Lakshmi**.
    - Let it voice completely, then export one **MP4, 720p, burned-in captions**.
-2. **Upload the same clip again** to the Library, unused. You'll start a live project from it to show the generation steps.
-3. **Pick one chunk** whose emotion you'll change on camera, for example to `laugh` or `whispers`, and play its audio once beforehand, so you know it sounds different.
-4. **Browser:** close other tabs, hide bookmarks, turn off notifications, and sign in.
-5. **Audio:** headphones on, quiet room, mic levels checked.
-6. **Recording:** OBS or the Xbox Game Bar (Win+Alt+R), with the cursor highlight on if your recorder has it.
+2. **Upload the same clip again** to the Library, unused, for the live "making it" moment.
+3. **Pick the chunk with the feeling in it** (the joke, the laugh, the emphasis). You'll change its emotion on
+   camera. Play it once beforehand so you know the re-voiced take sounds different.
+4. **Optional real footage** (phone camera is fine):
+   - *Opening:* an older relative watching a phone or TV, looking a little lost. Or just their hands holding a phone.
+   - *Ending:* the same person watching the Kannada version, and smiling or laughing at the right moment.
+
+   Ask their permission first. If you can't film, use the title cards marked below.
+5. **Browser:** close other tabs, hide bookmarks, turn off notifications, and sign in.
+6. **Audio:** headphones, quiet room, mic levels checked. Soft instrumental music under the voiceover, low.
 
 ## The script
 
+Speak slowly. Leave a beat of silence after the lines in *italics*: that's where the feeling lands.
+
+### Act 1: the gap (0:00–0:30)
+
 | # | Time | On screen | Voiceover |
 |---|---|---|---|
-| 1 | 0:00–0:12 | Landing page. Slowly scroll past the hero. | "This is Vani. It takes a video in one Indian language and gives it back dubbed in another, with the emotion intact, using Gnani's speech models." |
-| 2 | 0:12–0:25 | Click **Library**. Hover over the clip you uploaded. | "Everything starts in the Library. I upload a video once, and it's stored privately for my projects." |
-| 3 | 0:25–0:42 | Click **New project**. Choose **Dub the video's audio**, English → **Kannada**, voice **Lakshmi**. Click create. | "I'll dub this English clip into Kannada. Every voice speaks all ten Indian languages, so I just pick one I like." |
-| 4 | 0:42–0:58 | The generation screen: the Vani loader and the steps ticking through. | "Vani extracts the audio, and Gnani Prisma transcribes it. Gemini splits the speech into natural chunks and tags each one's emotion. Then it translates them, and Gnani Timbre voices every chunk." |
-| 5 | 0:58–1:12 | **Cut** to the prepared project, on the **Chunks** tab. Play chunk 1. | "Here's the result. Each chunk has the Kannada text, the original English underneath, and its own voice." |
-| 6 | 1:12–1:32 | Open the chunk you prepared. Change the emotion to **laugh**, click **Save and re-voice**, wait, then play it. | "If a line should sound different, I change its emotion and only that chunk is re-voiced. Listen: now it laughs." |
-| 7 | 1:32–1:52 | Switch to **Timeline**. Press play for 5 s. Select a voice clip and show the panel. Drag the clip slightly. | "The timeline works like a video editor: the video, the original audio, the new voice, music and captions on separate tracks. I can move a line, trim it, or edit its text and speed right here." |
-| 8 | 1:52–2:07 | **Export** tab. Point at Format / Resolution / Captions. On the prepared export, click **▶ Preview** and play 5 s with the burned-in captions. | "Then I export: MP4, WebM, MOV, or audio only, up to 1080p, with captions as a file or burned into the picture." |
-| 9 | 2:07–2:15 | *Optional:* the same project on a phone, or a narrow browser window. | "It also works on a phone." |
-| 10 | 2:15–2:25 | Back to the landing page, showing the team section. | "Vani is built with Gnani Prisma for speech recognition and Gnani Timbre for voices. We're Mithravardhan and Arko. Thanks for watching." |
+| 1 | 0:00–0:10 | **Footage:** grandmother with a phone, the English video playing. *Or* black screen, white text: **"Some voices never reach the people they're meant for."** | "My grandmother has watched me make videos for years. *She's never understood a single one.*" |
+| 2 | 0:10–0:20 | The English clip playing full-screen, with its original sound for 3–4 s. | "Not because she isn't curious. Because they're in English, and she thinks, laughs and argues in Kannada." |
+| 3 | 0:20–0:30 | Fade to the Vani landing page. Slow scroll. | "Subtitles lose her by the second line. A flat robot voice loses the person speaking. *So we built Vani.*" |
+
+### Act 2: carrying the voice across (0:30–1:45)
+
+| # | Time | On screen | Voiceover |
+|---|---|---|---|
+| 4 | 0:30–0:42 | **Library**. Hover over the uploaded clip. Click **New project**. | "I take the video I already made." |
+| 5 | 0:42–0:55 | Choose **Dub the video's audio**, English → **Kannada**, voice **Lakshmi**. Click create. | "I tell Vani who it's for: Kannada. And I choose a voice. Every one of them speaks all ten Indian languages." |
+| 6 | 0:55–1:10 | The generation screen: the Vani loader, steps ticking through. | "Gnani Prisma listens to every word. Gemini finds where each thought begins and ends, and *how* it was said. Then it translates it, and Gnani Timbre speaks it again, in Kannada." |
+| 7 | 1:10–1:22 | **Cut** to the prepared project, **Chunks** tab. Play chunk 1. Let it run. | *(Let the Kannada line play. Then, softly:)* "That's the same sentence. *Now she can hear it.*" |
+| 8 | 1:22–1:45 | Open the chunk with the feeling in it. Change the emotion to **laugh**, click **Save and re-voice**, wait, then play it. | "But a translation isn't a voice. In the original, I laughed here, and the laugh is the point. So I tell Vani: this line laughs. *(play it)* Now it does." |
+
+### Act 3: making it mine (1:45–2:10)
+
+| # | Time | On screen | Voiceover |
+|---|---|---|---|
+| 9 | 1:45–2:00 | **Timeline**. Press play for 5 s. Select a voice clip; nudge it, and show its text and speed in the panel. | "And when a line lands a beat too early, I move it. Like editing my own video, because it still is my video." |
+| 10 | 2:00–2:10 | **Export** tab: MP4, 720p, burned-in captions. On the prepared export, click **▶ Preview**. | "One click, and it's ready to send. Captions are burned in, for when she's watching on the bus." |
+
+### Ending: the payoff (2:10–2:30)
+
+| # | Time | On screen | Voiceover |
+|---|---|---|---|
+| 11 | 2:10–2:20 | **Footage:** grandmother watching the Kannada version on a phone; she laughs at the right moment. *Or* the preview playing full-screen on the laugh line. | *(Silence. Let her laugh, or the laugh line, be heard.)* "*She laughed at the right part.*" |
+| 12 | 2:20–2:30 | Landing page, team section. Then a black card: **Vani: your voice, in every language.** | "Vani is built on Gnani Prisma and Gnani Timbre. We're Mithravardhan and Arko. Because the people we love should be able to hear us." |
 
 ## 60-second cut
 
-Use shots **1** (shortened), **3**, **5**, **6**, **7** (5 s), **8** and **10** (shortened):
+Shots **1**, **3** (shortened), **5**, **7**, **8**, **11** and **12** (shortened):
 
-> "This is Vani: dub any video into another Indian language, emotion included. I pick a clip, choose Kannada and a voice, and Gnani Prisma transcribes it, Gemini splits and tags the emotion, and Gnani Timbre voices every line. Here's the result, line by line. I change this line to *laugh* and only it is re-voiced. The timeline lets me fine-tune timing like a video editor, and I export an MP4 with captions burned in. Built on Gnani Prisma and Timbre, by Mithravardhan and Arko."
+> "My grandmother has watched me make videos for years. She's never understood a single one, because they're in
+> English, and she lives in Kannada. So we built Vani. I take my video, choose Kannada and a voice. Gnani Prisma
+> listens, Gemini understands how each line was said, and Gnani Timbre says it again, in Kannada. Here, I laughed,
+> so I tell Vani: this line laughs. *(play it)* One click to export. *(her laugh)* She laughed at the right part.
+> Vani, built on Gnani Prisma and Timbre, by Mithravardhan and Arko. Your voice, in every language."
 
 ## Tips
 
-- **Don't record waiting.** Cut between the live generation (shot 4) and the prepared project (shot 5). Never leave more than about 3 s of spinner on screen.
-- **Say the model names clearly.** The rules require naming the models used: Gnani Prisma v2.5, Gnani Timbre v3.0, and Gemini 3.5 Flash-Lite for chunking and translation.
-- **Show the Kannada output, don't explain it.** Let one or two lines play out loud.
-- **Record the voiceover separately** if live narration feels rushed, then lay it over the screen recording.
-- **Shot 10 needs HTTPS** on the phone, which the site now has.
+- **The feeling is the product.** The emotion change in shot 8 is the moment the video is built around; give it
+  room. Don't rush past the re-voiced line.
+- **Silence is allowed.** The pauses after the italic lines do more than extra words.
+- **Never show waiting.** Cut from the live generation (shot 6) to the prepared project (shot 7). No more than
+  about 3 s of loader on screen.
+- **Name the models plainly** (the rules require it): Gnani Prisma v2.5, Gnani Timbre v3.0, and Gemini 3.5
+  Flash-Lite for chunking and translation.
+- **Keep it true.** If you film a relative, show a real reaction; don't stage words she didn't say.
+- **Record the voiceover separately**, in one calm take, then lay it over the screen recording and footage.

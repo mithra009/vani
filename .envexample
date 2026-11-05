@@ -1,5 +1,5 @@
 GNANI_API_KEY =
-GEMINI_API_KEY =
+GEMINI_API_KEYS =
 SUPABASE_URL=
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
@@ -16,4 +16,7 @@ ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # Folder containing ffmpeg/ffprobe — used when they aren't on the launching shell's
 # PATH (e.g. a worker started before the PATH refresh). Windows example below.
-# FFMPEG_BIN_DIR=C:\ffmpeg\bin
+# FFMPEG_BIN_DIR=C:\ffmpeg\bin 
+
+AWS_ACCESS_KEY_ID = 
+AWS_SECRET_ACCESS_KEY = 
